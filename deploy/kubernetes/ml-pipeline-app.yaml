@@ -1,0 +1,476 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-pipeline-app
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: application
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ml-pipeline-framework
+      component: application
+  template:
+    metadata:
+      labels:
+        app: ml-pipeline-framework
+        component: application
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ml-pipeline-app
+      initContainers:
+      - name: wait-for-dependencies
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for PostgreSQL..."
+          until nc -z postgres-service 5432; do
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+          
+          echo "Waiting for MLflow..."
+          until nc -z mlflow-service 5000; do
+            sleep 2
+          done
+          echo "MLflow is ready!"
+          
+          echo "All dependencies are ready!"
+      containers:
+      - name: ml-pipeline
+        image: ml-pipeline-framework:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 4040
+          name: spark-ui
+          protocol: TCP
+        - containerPort: 8888
+          name: jupyter
+          protocol: TCP
+        env:
+        - name: EXECUTION_MODE
+          value: "daemon"
+        - name: CONFIG_PATH
+          value: "/app/configs/pipeline_config.yaml"
+        - name: SPARK_HOME
+          value: "/opt/spark"
+        - name: SPARK_CONF_DIR
+          value: "/opt/spark/conf"
+        - name: PYTHONPATH
+          value: "/app:$PYTHONPATH"
+        
+        # Database configuration
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres_db
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres_user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres_password
+        
+        # MLflow configuration
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service:5000"
+        - name: MLFLOW_ARTIFACT_ROOT
+          value: "/app/artifacts"
+        
+        # AWS/S3 configuration for artifacts
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: aws_secret_access_key
+        - name: AWS_DEFAULT_REGION
+          value: "us-west-2"
+        
+        # Kubernetes configuration
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/configs
+          readOnly: true
+        - name: scripts-volume
+          mountPath: /app/scripts
+          readOnly: true
+        - name: data-volume
+          mountPath: /app/data
+        - name: models-volume
+          mountPath: /app/models
+        - name: artifacts-volume
+          mountPath: /app/artifacts
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: spark-conf
+          mountPath: /opt/spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+          readOnly: true
+        - name: spark-conf
+          mountPath: /opt/spark/conf/log4j.properties
+          subPath: log4j.properties
+          readOnly: true
+        
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - /healthcheck.py
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          timeoutSeconds: 30
+          successThreshold: 1
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - /healthcheck.py
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 15
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      
+      # Monitoring sidecar
+      - name: monitoring
+        image: ml-pipeline-framework:latest
+        command:
+        - python
+        - /app/scripts/monitor.py
+        env:
+        - name: MONITOR_INTERVAL
+          value: "60"
+        - name: PROMETHEUS_PUSHGATEWAY
+          value: "pushgateway:9091"
+        - name: JOB_NAME
+          value: "ml-pipeline"
+        volumeMounts:
+        - name: scripts-volume
+          mountPath: /app/scripts
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ml-pipeline-config
+          items:
+          - key: pipeline_config.yaml
+            path: pipeline_config.yaml
+      - name: scripts-volume
+        configMap:
+          name: ml-pipeline-scripts
+          defaultMode: 0755
+      - name: spark-conf
+        configMap:
+          name: ml-pipeline-config
+          items:
+          - key: spark-defaults.conf
+            path: spark-defaults.conf
+          - key: log4j.properties
+            path: log4j.properties
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: ml-pipeline-data-pvc
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: ml-pipeline-models-pvc
+      - name: artifacts-volume
+        persistentVolumeClaim:
+          claimName: ml-pipeline-artifacts-pvc
+      - name: logs-volume
+        emptyDir: {}
+      
+      # Node affinity and tolerations
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ml-pipeline-framework
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute
+      
+      # Tolerations for dedicated nodes
+      tolerations:
+      - key: "ml-workload"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-pipeline-service
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: application
+spec:
+  selector:
+    app: ml-pipeline-framework
+    component: application
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  - port: 4040
+    targetPort: 4040
+    name: spark-ui
+  - port: 8888
+    targetPort: 8888
+    name: jupyter
+  type: ClusterIP
+
+---
+# Load Balancer Service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-pipeline-lb
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: loadbalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  selector:
+    app: ml-pipeline-framework
+    component: application
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  - port: 8888
+    targetPort: 8888
+    name: jupyter
+  type: LoadBalancer
+
+---
+# Ingress for web interfaces
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ml-pipeline-ingress
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "ML Pipeline Framework"
+spec:
+  tls:
+  - hosts:
+    - ml-pipeline.yourdomain.com
+    - jupyter.yourdomain.com
+    secretName: ml-pipeline-tls
+  rules:
+  - host: ml-pipeline.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-service
+            port:
+              number: 8080
+      - path: /spark
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-service
+            port:
+              number: 4040
+  - host: jupyter.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-service
+            port:
+              number: 8888
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ml-pipeline-hpa
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ml-pipeline-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+      selectPolicy: Min
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ml-pipeline-pdb
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: disruption-budget
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ml-pipeline-framework
+      component: application
+
+---
+# Service Monitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ml-pipeline-metrics
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: ml-pipeline-framework
+      component: application
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

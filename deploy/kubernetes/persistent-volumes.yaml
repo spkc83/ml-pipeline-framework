@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ml-pipeline-data-pv
+  labels:
+    app: ml-pipeline-framework
+    component: storage
+    type: data
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ml-pipeline-storage
+  nfs:
+    # Replace with your NFS server details
+    server: nfs-server.example.com
+    path: /exports/ml-pipeline/data
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - intr
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ml-pipeline-models-pv
+  labels:
+    app: ml-pipeline-framework
+    component: storage
+    type: models
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ml-pipeline-storage
+  nfs:
+    server: nfs-server.example.com
+    path: /exports/ml-pipeline/models
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - intr
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ml-pipeline-artifacts-pv
+  labels:
+    app: ml-pipeline-framework
+    component: storage
+    type: artifacts
+spec:
+  capacity:
+    storage: 200Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ml-pipeline-storage
+  nfs:
+    server: nfs-server.example.com
+    path: /exports/ml-pipeline/artifacts
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - intr
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  labels:
+    app: postgres
+    component: database
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: postgres-storage
+  hostPath:
+    path: /mnt/postgres-data
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-pv
+  labels:
+    app: minio
+    component: storage
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: minio-storage
+  hostPath:
+    path: /mnt/minio-data
+    type: DirectoryOrCreate
+
+---
+# Storage Classes
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ml-pipeline-storage
+  labels:
+    app: ml-pipeline-framework
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: postgres-storage
+  labels:
+    app: postgres
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: minio-storage
+  labels:
+    app: minio
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+---
+# PersistentVolumeClaims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-pipeline-data-pvc
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: storage
+    type: data
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ml-pipeline-storage
+  resources:
+    requests:
+      storage: 50Gi
+  selector:
+    matchLabels:
+      type: data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-pipeline-models-pvc
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: storage
+    type: models
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ml-pipeline-storage
+  resources:
+    requests:
+      storage: 100Gi
+  selector:
+    matchLabels:
+      type: models
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-pipeline-artifacts-pvc
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: storage
+    type: artifacts
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ml-pipeline-storage
+  resources:
+    requests:
+      storage: 200Gi
+  selector:
+    matchLabels:
+      type: artifacts
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ml-pipeline
+  labels:
+    app: postgres
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: postgres-storage
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: ml-pipeline
+  labels:
+    app: minio
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: minio-storage
+  resources:
+    requests:
+      storage: 100Gi

@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    environment: production
+    version: v1.0.0
+  annotations:
+    description: "ML Pipeline Framework namespace for production workloads"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ml-pipeline-quota
+  namespace: ml-pipeline
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: 40Gi
+    limits.cpu: "40"
+    limits.memory: 80Gi
+    persistentvolumeclaims: "10"
+    pods: "50"
+    services: "20"
+    secrets: "10"
+    configmaps: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ml-pipeline-limits
+  namespace: ml-pipeline
+spec:
+  limits:
+  - default:
+      cpu: "2"
+      memory: "4Gi"
+    defaultRequest:
+      cpu: "500m"
+      memory: "1Gi"
+    type: Container
+  - max:
+      cpu: "8"
+      memory: "16Gi"
+    min:
+      cpu: "100m"
+      memory: "256Mi"
+    type: Container

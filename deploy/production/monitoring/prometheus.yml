@@ -1,0 +1,216 @@
+# Prometheus Configuration for ML Pipeline Framework
+# Comprehensive monitoring setup for production ML pipelines with
+# application metrics, system metrics, and custom business metrics
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ml-pipeline-production'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Rules configuration
+rule_files:
+  - "alert-rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # ML Pipeline Application metrics
+  - job_name: 'ml-pipeline-app'
+    static_configs:
+      - targets: ['ml-pipeline-app:8080']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    metric_relabel_configs:
+      # Add custom labels for ML pipeline metrics
+      - source_labels: [__name__]
+        regex: 'ml_pipeline_.*'
+        target_label: 'component'
+        replacement: 'ml-pipeline'
+      
+      # Relabel model metrics
+      - source_labels: [__name__]
+        regex: 'model_.*'
+        target_label: 'component'
+        replacement: 'model'
+    
+    # Custom metrics for ML pipeline
+    honor_labels: true
+    honor_timestamps: true
+
+  # System metrics via Node Exporter
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: node-exporter:9100
+
+  # PostgreSQL metrics (using postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Redis metrics (using redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # MLflow metrics
+  - job_name: 'mlflow'
+    static_configs:
+      - targets: ['mlflow:5000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Nginx metrics (using nginx-prometheus-exporter)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # Grafana metrics
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Alertmanager metrics
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Custom business metrics endpoint
+  - job_name: 'business-metrics'
+    static_configs:
+      - targets: ['ml-pipeline-app:8080']
+    scrape_interval: 60s  # Less frequent for business metrics
+    metrics_path: /business-metrics
+    scrape_timeout: 30s
+    
+    # Add custom labels for business metrics
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'business_.*'
+        target_label: 'metric_type'
+        replacement: 'business'
+      
+      - source_labels: [__name__]
+        regex: 'fraud_.*'
+        target_label: 'domain'
+        replacement: 'fraud-detection'
+
+  # Model drift monitoring
+  - job_name: 'model-drift'
+    static_configs:
+      - targets: ['ml-pipeline-app:8080']
+    scrape_interval: 300s  # Every 5 minutes
+    metrics_path: /drift-metrics
+    scrape_timeout: 30s
+    
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'drift_.*'
+        target_label: 'metric_type'
+        replacement: 'drift'
+
+  # Data quality metrics
+  - job_name: 'data-quality'
+    static_configs:
+      - targets: ['ml-pipeline-app:8080']
+    scrape_interval: 300s  # Every 5 minutes
+    metrics_path: /data-quality-metrics
+    scrape_timeout: 30s
+    
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'data_quality_.*'
+        target_label: 'metric_type'
+        replacement: 'data-quality'
+
+  # Model performance metrics
+  - job_name: 'model-performance'
+    static_configs:
+      - targets: ['ml-pipeline-app:8080']
+    scrape_interval: 60s
+    metrics_path: /model-metrics
+    scrape_timeout: 15s
+    
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'model_performance_.*'
+        target_label: 'metric_type'
+        replacement: 'model-performance'
+      
+      - source_labels: [model_name]
+        target_label: 'model'
+        replacement: '${1}'
+
+# Remote storage configuration (optional - for long-term storage)
+# remote_write:
+#   - url: "http://thanos-receive:19291/api/v1/receive"
+#     queue_config:
+#       max_samples_per_send: 1000
+#       max_shards: 200
+#       capacity: 2500
+
+# Optional: Remote read configuration
+# remote_read:
+#   - url: "http://thanos-query:9090/api/v1/query"
+#     read_recent: true
+
+# Storage configuration
+storage:
+  tsdb:
+    # Retention period
+    retention: "15d"
+    retention.size: "10GB"
+    
+    # Compression
+    wal-compression: true
+    
+    # Block duration
+    min-block-duration: "2h"
+    max-block-duration: "25h"
+
+# Feature flags
+feature_flags:
+  # Enable new features
+  enable-feature: []
+
+# Tracing configuration (optional)
+# tracing:
+#   endpoint: "http://jaeger:14268/api/traces"
+#   sampler:
+#     type: const
+#     param: 1

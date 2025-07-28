@@ -1,0 +1,269 @@
+# Explainability Configuration for ML Pipeline Framework
+# Comprehensive interpretability settings for all supported methods
+
+explainability_settings:
+  # Global interpretability methods
+  global:
+    # SHAP (SHapley Additive exPlanations)
+    shap:
+      enabled: true
+      max_samples: 1000
+      algorithm: "auto"  # tree, linear, kernel, sampling
+      interaction_analysis: true
+      background_samples: 100
+      plots:
+        - "summary_plot"
+        - "waterfall_plot"
+        - "force_plot"
+        - "dependence_plot"
+        - "interaction_plot"
+        - "heatmap"
+      export_values: true
+      
+    # Functional ANOVA for feature interactions
+    functional_anova:
+      enabled: true
+      max_order: 2
+      n_permutations: 100
+      interaction_strength_threshold: 0.1
+      significance_level: 0.05
+      bootstrap_confidence: true
+      
+    # ALE (Accumulated Local Effects) plots
+    ale_plots:
+      enabled: true
+      n_bins: 20
+      center: true
+      plot_pdp_comparison: true
+      features: "auto"  # auto, top_10, all, [list]
+      sample_size: 1000
+      confidence_intervals: true
+      
+    # Permutation importance
+    permutation_importance:
+      enabled: true
+      n_repeats: 10
+      scoring_metric: "precision_at_k"
+      plot_top_n: 20
+      random_state: 42
+      
+    # Surrogate models for global approximation
+    surrogate_models:
+      enabled: true
+      models: ["decision_tree", "linear_model"]
+      max_depth: 5
+      fidelity_threshold: 0.8
+      surrogate_accuracy_threshold: 0.85
+      interpretable_features_only: false
+      
+  # Local interpretability methods
+  local:
+    # LIME (Local Interpretable Model-agnostic Explanations)
+    lime:
+      enabled: true
+      mode: "tabular"
+      n_samples: 5000
+      n_features: 10
+      discretize_continuous: true
+      feature_selection: "auto"  # auto, forward_selection, lasso_path
+      sample_around_instance: true
+      random_state: 42
+      
+    # Anchors for rule-based explanations
+    anchors:
+      enabled: true
+      threshold: 0.95
+      max_features: 5
+      beam_size: 2
+      coverage_samples: 10000
+      max_anchor_size: 5
+      min_samples_start: 100
+      n_covered_ex: 10
+      random_state: 42
+      
+    # Counterfactual explanations
+    counterfactuals:
+      enabled: true
+      method: "dice"  # dice, wachter, prototype
+      n_counterfactuals: 5
+      max_features_changed: 3
+      diversity_weight: 0.5
+      proximity_weight: 0.5
+      sparsity_weight: 0.1
+      actionability_constraints: true
+      feasibility_constraints: true
+      random_state: 42
+      
+    # ICE (Individual Conditional Expectation) plots
+    ice_plots:
+      enabled: true
+      n_samples: 100
+      feature_subset: "top_10"
+      center: true
+      fraction_to_plot: 0.1
+      
+  # Advanced interpretability methods
+  advanced:
+    # Trust scores for prediction reliability
+    trust_scores:
+      enabled: true
+      k_neighbors: 10
+      confidence_threshold: 0.8
+      alpha: 0.0  # filtering parameter
+      filtering: true
+      min_dist: 1e-12
+      uncertainty_quantification: true
+      
+    # Prototypes and criticisms
+    prototypes:
+      enabled: true
+      n_prototypes_per_class: 10
+      selection_method: "mmcriticism"  # kmeans, random, mmcriticism
+      include_criticisms: true
+      kernel: "gaussian"
+      sigma: 1.0
+      
+    # Concept activation vectors (for neural networks)
+    concept_activation:
+      enabled: true
+      n_concepts: 20
+      significance_level: 0.05
+      concept_sensitivity: true
+      statistical_testing: "two_sided"
+      n_runs: 10
+      
+    # Causal analysis
+    causal_analysis:
+      enabled: true
+      method: "do_calculus"
+      confounding_adjustment: true
+      backdoor_criterion: true
+      instrumental_variables: []
+      causal_graph: null  # Optional causal DAG
+      
+  # Fraud-specific explanations
+  fraud_specific:
+    # Regulatory reason codes
+    reason_codes:
+      enabled: true
+      code_mapping:
+        "high_amount": "Transaction amount significantly above normal"
+        "unusual_time": "Transaction at unusual time of day"
+        "merchant_risk": "High-risk merchant category"
+        "velocity": "High transaction velocity detected"
+        "location_risk": "Transaction from high-risk location"
+      max_codes: 4
+      
+    # Natural language explanations
+    narrative_explanations:
+      enabled: true
+      template_based: true
+      include_confidence: true
+      include_alternatives: true
+      language: "en"
+      
+    # Risk factor analysis
+    risk_factors:
+      enabled: true
+      factor_weights: true
+      interactive_effects: true
+      temporal_patterns: true
+      
+    # Pattern detection in explanations
+    pattern_detection:
+      enabled: true
+      clustering_method: "kmeans"
+      n_clusters: 5
+      pattern_similarity_threshold: 0.7
+      
+    # Regulatory compliance explanations
+    regulatory_explanations:
+      enabled: true
+      gdpr_compliant: true
+      right_to_explanation: true
+      automated_decision_explanations: true
+      human_reviewable: true
+      
+  # Reporting and output configuration
+  reporting:
+    # Automatic report generation
+    auto_generate: true
+    include_technical_details: true
+    business_summary: true
+    regulatory_format: true
+    
+    # Report formats
+    formats: ["html", "pdf", "json"]
+    interactive_plots: true
+    static_plots: true
+    
+    # Executive summary
+    executive_summary:
+      enabled: true
+      key_insights: true
+      recommendations: true
+      risk_assessment: true
+      
+    # Technical appendix
+    technical_appendix:
+      methodology: true
+      assumptions: true
+      limitations: true
+      validation_results: true
+      
+  # Quality assurance for explanations
+  quality_assurance:
+    # Explanation consistency checks
+    consistency_checks:
+      enabled: true
+      tolerance: 0.1
+      n_runs: 5
+      
+    # Explanation stability
+    stability_analysis:
+      enabled: true
+      perturbation_ratio: 0.1
+      n_perturbations: 100
+      stability_threshold: 0.8
+      
+    # Human evaluation integration
+    human_evaluation:
+      enabled: false
+      evaluation_criteria: ["comprehensibility", "usefulness", "trust"]
+      
+  # Performance optimization
+  performance:
+    # Parallel processing
+    parallel_processing: true
+    n_jobs: -1
+    
+    # Caching
+    cache_explanations: true
+    cache_location: "./artifacts/explanations_cache"
+    cache_size_limit: "5GB"
+    
+    # Approximation settings
+    approximation:
+      enabled: true
+      sample_size_reduction: true
+      feature_selection: true
+      early_stopping: true
+      
+  # Integration settings
+  integration:
+    # AutoML integration
+    automl_integration:
+      explain_best_model: true
+      explain_ensemble_components: true
+      model_comparison: true
+      
+    # Model monitoring integration
+    monitoring_integration:
+      explanation_drift: true
+      feature_importance_tracking: true
+      explanation_quality_metrics: true
+      
+    # A/B testing integration
+    ab_testing:
+      compare_explanations: true
+      explanation_effectiveness: true

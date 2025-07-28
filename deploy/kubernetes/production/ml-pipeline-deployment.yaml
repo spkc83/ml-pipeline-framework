@@ -1,0 +1,603 @@
+# ML Pipeline Framework - Production Kubernetes Deployment
+# Complete production-ready Kubernetes deployment with high availability,
+# monitoring, security, and auto-scaling capabilities
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-pipeline-production
+  labels:
+    name: ml-pipeline-production
+    environment: production
+    managed-by: ml-pipeline-framework
+
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-pipeline-config
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: config
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  WORKERS: "4"
+  TIMEOUT: "300"
+  PROMETHEUS_ENABLED: "true"
+  METRICS_PORT: "8080"
+  HEALTH_CHECK_PORT: "8090"
+  # Database configuration
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "ml_pipeline"
+  # Redis configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  # MLflow configuration
+  MLFLOW_TRACKING_URI: "http://mlflow-service:5000"
+
+---
+# Secret for sensitive configuration
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ml-pipeline-secrets
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: secrets
+type: Opaque
+data:
+  # Base64 encoded secrets (replace with actual values)
+  DB_PASSWORD: bWxfcGFzc3dvcmQ=  # ml_password
+  REDIS_PASSWORD: cmVkaXNfcGFzc3dvcmQ=  # redis_password
+  ENCRYPTION_KEY: ZW5jcnlwdGlvbl9rZXlfdmFsdWU=  # encryption_key_value
+  JWT_SECRET: and0X3NlY3JldF92YWx1ZQ==  # jwt_secret_value
+  AWS_ACCESS_KEY_ID: YXdzX2FjY2Vzc19rZXk=  # aws_access_key
+  AWS_SECRET_ACCESS_KEY: YXdzX3NlY3JldF9rZXk=  # aws_secret_key
+
+---
+# Persistent Volume Claim for models
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-models-pvc
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: fast-ssd
+
+---
+# Persistent Volume Claim for data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-data-pvc
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: standard
+
+---
+# Persistent Volume Claim for artifacts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-artifacts-pvc
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: standard
+
+---
+# ML Pipeline Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-pipeline-app
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: application
+    version: "2.0.0"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ml-pipeline
+      component: application
+  template:
+    metadata:
+      labels:
+        app: ml-pipeline
+        component: application
+        version: "2.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ml-pipeline-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+      - name: ml-pipeline
+        image: ml-pipeline-framework:2.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        - name: health
+          containerPort: 8090
+          protocol: TCP
+        env:
+        # Configuration from ConfigMap
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: ENVIRONMENT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: LOG_LEVEL
+        - name: WORKERS
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: WORKERS
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: DB_NAME
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: REDIS_HOST
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: ml-pipeline-config
+              key: MLFLOW_TRACKING_URI
+        # Secrets
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: DB_PASSWORD
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: REDIS_PASSWORD
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: ENCRYPTION_KEY
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: JWT_SECRET
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ml-pipeline-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        # Resource limits
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        # Volume mounts
+        volumeMounts:
+        - name: ml-models
+          mountPath: /app/models
+        - name: ml-data
+          mountPath: /app/data
+        - name: ml-artifacts
+          mountPath: /app/artifacts
+        - name: config-volume
+          mountPath: /app/configs
+          readOnly: true
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: ml-models
+        persistentVolumeClaim:
+          claimName: ml-models-pvc
+      - name: ml-data
+        persistentVolumeClaim:
+          claimName: ml-data-pvc
+      - name: ml-artifacts
+        persistentVolumeClaim:
+          claimName: ml-artifacts-pvc
+      - name: config-volume
+        configMap:
+          name: ml-pipeline-config
+      # Node selection
+      nodeSelector:
+        workload: ml-pipeline
+        node-type: compute-optimized
+      # Tolerations
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "ml-pipeline"
+        effect: "NoSchedule"
+      # Affinity rules
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ml-pipeline
+              topologyKey: kubernetes.io/hostname
+
+---
+# Service for ML Pipeline Application
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-pipeline-service
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: service
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+    protocol: TCP
+  - name: health
+    port: 8090
+    targetPort: health
+    protocol: TCP
+  selector:
+    app: ml-pipeline
+    component: application
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ml-pipeline-hpa
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ml-pipeline-app
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: custom_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ml-pipeline-pdb
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ml-pipeline
+      component: application
+
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ml-pipeline-service-account
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: rbac
+
+---
+# Role for ML Pipeline
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ml-pipeline-role
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch"]
+
+---
+# Role Binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ml-pipeline-role-binding
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: ml-pipeline-service-account
+  namespace: ml-pipeline-production
+roleRef:
+  kind: Role
+  name: ml-pipeline-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ml-pipeline-network-policy
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: network-security
+spec:
+  podSelector:
+    matchLabels:
+      app: ml-pipeline
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8090
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ml-pipeline-production
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+    - protocol: TCP
+      port: 5000  # MLflow
+  - to: []  # Allow external traffic
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 80   # HTTP
+    - protocol: UDP
+      port: 53   # DNS
+
+---
+# Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ml-pipeline-ingress
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - ml-pipeline.yourdomain.com
+    secretName: ml-pipeline-tls
+  rules:
+  - host: ml-pipeline.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-service
+            port:
+              number: 8000
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-service
+            port:
+              number: 8080
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-service
+            port:
+              number: 8090
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ml-pipeline-service-monitor
+  namespace: ml-pipeline-production
+  labels:
+    app: ml-pipeline
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: ml-pipeline
+      component: service
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+  - port: metrics
+    interval: 60s
+    path: /business-metrics
+  - port: metrics
+    interval: 300s
+    path: /drift-metrics

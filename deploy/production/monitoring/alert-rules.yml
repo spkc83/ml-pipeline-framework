@@ -1,0 +1,404 @@
+# Prometheus Alert Rules for ML Pipeline Framework
+# Comprehensive alerting for production ML systems including
+# infrastructure, application, model performance, and business metrics
+
+groups:
+  # Infrastructure Alerts
+  - name: infrastructure
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-cpu"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-memory"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% on {{ $labels.instance }} mountpoint {{ $labels.mountpoint }}"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/low-disk-space"
+
+      - alert: HighDiskIOWait
+        expr: irate(node_cpu_seconds_total{mode="iowait"}[5m]) * 100 > 50
+        for: 10m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High disk I/O wait time"
+          description: "I/O wait time is above 50% for more than 10 minutes on {{ $labels.instance }}"
+
+  # Application Alerts
+  - name: application
+    interval: 15s
+    rules:
+      - alert: ApplicationDown
+        expr: up{job="ml-pipeline-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "ML Pipeline application is down"
+          description: "The ML Pipeline application has been down for more than 1 minute"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/app-down"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for more than 5 minutes (current: {{ $value }}%)"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-error-rate"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is above 5 seconds (current: {{ $value }}s)"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-response-time"
+
+      - alert: LowThroughput
+        expr: rate(http_requests_total[10m]) < 1
+        for: 10m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "Low application throughput"
+          description: "Request rate is below 1 req/sec for more than 10 minutes"
+
+  # Database Alerts
+  - name: database
+    interval: 30s
+    rules:
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been down for more than 1 minute"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/database-down"
+
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connection usage is above 80% ({{ $value }}%)"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-db-connections"
+
+      - alert: LongRunningQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Long running database queries detected"
+          description: "Queries running for more than 5 minutes detected"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/long-queries"
+
+      - alert: DatabaseReplicationLag
+        expr: pg_stat_replication_lag > 60
+        for: 2m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database replication lag detected"
+          description: "Replication lag is above 60 seconds ({{ $value }}s)"
+
+  # ML Model Performance Alerts
+  - name: model_performance
+    interval: 60s
+    rules:
+      - alert: ModelAccuracyDrop
+        expr: model_performance_accuracy < 0.85
+        for: 10m
+        labels:
+          severity: warning
+          category: model
+        annotations:
+          summary: "Model accuracy drop detected"
+          description: "Model {{ $labels.model_name }} accuracy dropped below 85% (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/model-accuracy-drop"
+
+      - alert: ModelPrecisionDrop
+        expr: model_performance_precision < 0.80
+        for: 10m
+        labels:
+          severity: warning
+          category: model
+        annotations:
+          summary: "Model precision drop detected"
+          description: "Model {{ $labels.model_name }} precision dropped below 80% (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/model-precision-drop"
+
+      - alert: ModelRecallDrop
+        expr: model_performance_recall < 0.70
+        for: 10m
+        labels:
+          severity: warning
+          category: model
+        annotations:
+          summary: "Model recall drop detected"
+          description: "Model {{ $labels.model_name }} recall dropped below 70% (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/model-recall-drop"
+
+      - alert: HighModelLatency
+        expr: model_inference_duration_seconds > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          category: model
+        annotations:
+          summary: "High model inference latency"
+          description: "Model {{ $labels.model_name }} inference latency above 1 second (current: {{ $value }}s)"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-model-latency"
+
+  # Data Drift Alerts
+  - name: data_drift
+    interval: 300s
+    rules:
+      - alert: DataDriftDetected
+        expr: drift_detection_psi > 0.2
+        for: 15m
+        labels:
+          severity: warning
+          category: drift
+        annotations:
+          summary: "Data drift detected"
+          description: "PSI drift score above 0.2 for feature {{ $labels.feature_name }} (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/data-drift"
+
+      - alert: ConceptDriftDetected
+        expr: drift_detection_concept_drift > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          category: drift
+        annotations:
+          summary: "Concept drift detected"
+          description: "Concept drift detected with magnitude {{ $value }}"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/concept-drift"
+
+      - alert: FeatureDistributionShift
+        expr: drift_detection_js_divergence > 0.3
+        for: 15m
+        labels:
+          severity: warning
+          category: drift
+        annotations:
+          summary: "Feature distribution shift detected"
+          description: "Jensen-Shannon divergence above 0.3 for feature {{ $labels.feature_name }}"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/feature-distribution-shift"
+
+  # Business Metrics Alerts
+  - name: business_metrics
+    interval: 300s
+    rules:
+      - alert: FraudDetectionRateDrop
+        expr: business_fraud_detection_rate < 0.90
+        for: 30m
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "Fraud detection rate dropped"
+          description: "Fraud detection rate dropped below 90% (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/fraud-detection-rate-drop"
+
+      - alert: HighFalsePositiveRate
+        expr: business_false_positive_rate > 0.05
+        for: 30m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High false positive rate"
+          description: "False positive rate above 5% (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-false-positive-rate"
+
+      - alert: BusinessValueDrop
+        expr: business_expected_value < 80000
+        for: 60m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Business value drop detected"
+          description: "Expected business value dropped below $80k (current: ${{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/business-value-drop"
+
+      - alert: LowTransactionVolume
+        expr: business_transaction_volume_hourly < 100
+        for: 60m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Low transaction volume"
+          description: "Hourly transaction volume below 100 (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/low-transaction-volume"
+
+  # Data Quality Alerts
+  - name: data_quality
+    interval: 300s
+    rules:
+      - alert: HighMissingValueRate
+        expr: data_quality_missing_value_rate > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          category: data_quality
+        annotations:
+          summary: "High missing value rate detected"
+          description: "Missing value rate above 10% for feature {{ $labels.feature_name }} (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-missing-values"
+
+      - alert: DataSchemaViolation
+        expr: data_quality_schema_violations > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: data_quality
+        annotations:
+          summary: "Data schema violations detected"
+          description: "{{ $value }} schema violations detected in incoming data"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/schema-violations"
+
+      - alert: OutlierDetection
+        expr: data_quality_outlier_rate > 0.05
+        for: 30m
+        labels:
+          severity: warning
+          category: data_quality
+        annotations:
+          summary: "High outlier rate detected"
+          description: "Outlier rate above 5% for feature {{ $labels.feature_name }} (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/high-outliers"
+
+  # Security and Compliance Alerts
+  - name: security
+    interval: 60s
+    rules:
+      - alert: UnauthorizedAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Unauthorized access attempts detected"
+          description: "High rate of 401 responses detected ({{ $value }} req/sec)"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/unauthorized-access"
+
+      - alert: SuspiciousActivity
+        expr: rate(http_requests_total{status="403"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Suspicious activity detected"
+          description: "High rate of 403 responses detected ({{ $value }} req/sec)"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/suspicious-activity"
+
+      - alert: AuditLogFailure
+        expr: audit_log_failures > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Audit log failures detected"
+          description: "{{ $value }} audit log failures detected"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/audit-log-failure"
+
+  # MLflow Alerts
+  - name: mlflow
+    interval: 60s
+    rules:
+      - alert: MLflowDown
+        expr: up{job="mlflow"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: mlflow
+        annotations:
+          summary: "MLflow tracking server is down"
+          description: "MLflow has been down for more than 2 minutes"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/mlflow-down"
+
+      - alert: ExperimentTrackingFailure
+        expr: mlflow_experiment_failures > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: mlflow
+        annotations:
+          summary: "MLflow experiment tracking failures"
+          description: "{{ $value }} experiment tracking failures in the last 5 minutes"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/experiment-tracking-failure"
+
+  # Fairness and Bias Alerts
+  - name: fairness
+    interval: 600s
+    rules:
+      - alert: BiasDetected
+        expr: fairness_demographic_parity < 0.8
+        for: 30m
+        labels:
+          severity: warning
+          category: fairness
+        annotations:
+          summary: "Bias detected in model predictions"
+          description: "Demographic parity below 0.8 for group {{ $labels.protected_attribute }} (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/bias-detected"
+
+      - alert: FairnessViolation
+        expr: fairness_equalized_odds < 0.8
+        for: 30m
+        labels:
+          severity: critical
+          category: fairness
+        annotations:
+          summary: "Fairness violation detected"
+          description: "Equalized odds below 0.8 for group {{ $labels.protected_attribute }} (current: {{ $value }})"
+          runbook_url: "https://docs.ml-pipeline.com/runbooks/fairness-violation"

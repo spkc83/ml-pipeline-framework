@@ -1,0 +1,265 @@
+# ML Pipeline Configuration for Airflow DAG Generation
+
+name: "customer_churn_prediction"
+description: "Customer churn prediction ML pipeline"
+schedule_interval: "0 2 * * *"  # Daily at 2 AM
+start_date: "2024-01-01"
+catchup: false
+max_active_runs: 1
+
+# Default arguments for all tasks
+default_args:
+  owner: "ml-team"
+  depends_on_past: false
+  email_on_failure: true
+  email_on_retry: false
+  retries: 2
+  retry_delay_minutes: 5
+  execution_timeout_hours: 2
+  email:
+    - "ml-team@company.com"
+
+# Pipeline variables
+variables:
+  config_path: "/opt/ml-pipeline/configs/churn_prediction.yaml"
+  model_name: "churn_prediction_model"
+  data_source: "postgres"
+  mlflow_experiment: "churn_prediction"
+  notification_email: "ml-team@company.com"
+  s3_bucket: "ml-pipeline-artifacts"
+  environment: "production"
+
+# Custom tasks (optional - will use defaults if not specified)
+tasks:
+  # Data Processing Tasks
+  - task_id: "extract_raw_data"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.extract_raw_data"
+    description: "Extract customer data from PostgreSQL"
+    params:
+      query: |
+        SELECT * FROM ml_data.customer_summary 
+        WHERE updated_at >= '{{ ds }}'
+      connection_id: "postgres_ml"
+    
+  - task_id: "data_quality_validation"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.validate_data_quality"
+    description: "Validate data quality using Great Expectations"
+    params:
+      expectation_suite: "customer_churn_expectations"
+      fail_on_error: true
+    
+  - task_id: "feature_engineering"
+    task_type: "spark"
+    application_file: "/opt/ml-pipeline/spark_jobs/feature_engineering.py"
+    description: "Engineer features for churn prediction"
+    spark_config:
+      spark.executor.memory: "4g"
+      spark.executor.cores: "2"
+      spark.driver.memory: "2g"
+    
+  # Training Tasks
+  - task_id: "train_model"
+    task_type: "kubernetes"
+    image: "ml-pipeline-framework:latest"
+    command: ["python", "/app/scripts/train.py"]
+    description: "Train churn prediction model"
+    resources:
+      memory: "8Gi"
+      cpu: "4"
+    env_vars:
+      EXPERIMENT_NAME: "{{ var.value.mlflow_experiment }}"
+      MODEL_NAME: "{{ var.value.model_name }}"
+      CONFIG_PATH: "{{ var.value.config_path }}"
+    
+  - task_id: "model_evaluation"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.evaluate_model"
+    description: "Evaluate model performance"
+    params:
+      metrics:
+        - "accuracy"
+        - "precision"
+        - "recall"
+        - "f1"
+        - "roc_auc"
+      threshold: 0.8
+    
+  - task_id: "model_validation"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.validate_model"
+    description: "Validate model meets business requirements"
+    params:
+      min_accuracy: 0.85
+      min_precision: 0.80
+      max_feature_count: 50
+    
+  # Deployment Tasks
+  - task_id: "register_model"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.register_model_mlflow"
+    description: "Register model in MLflow Model Registry"
+    params:
+      model_name: "{{ var.value.model_name }}"
+      stage: "Staging"
+    
+  - task_id: "deploy_model_staging"
+    task_type: "kubernetes"
+    image: "ml-pipeline-framework:latest"
+    command: ["python", "/app/scripts/deploy_model.py"]
+    description: "Deploy model to staging environment"
+    env_vars:
+      ENVIRONMENT: "staging"
+      MODEL_NAME: "{{ var.value.model_name }}"
+      MODEL_VERSION: "{{ ti.xcom_pull('register_model')['version'] }}"
+    
+  - task_id: "integration_tests"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.run_integration_tests"
+    description: "Run integration tests on deployed model"
+    params:
+      test_data_path: "/opt/ml-pipeline/test_data/integration_test.csv"
+      expected_accuracy: 0.85
+    
+  - task_id: "deploy_model_production"
+    task_type: "kubernetes"
+    image: "ml-pipeline-framework:latest"
+    command: ["python", "/app/scripts/deploy_model.py"]
+    description: "Deploy model to production environment"
+    env_vars:
+      ENVIRONMENT: "production"
+      MODEL_NAME: "{{ var.value.model_name }}"
+      MODEL_VERSION: "{{ ti.xcom_pull('register_model')['version'] }}"
+    trigger_rule: "all_success"
+    
+  # Monitoring Tasks
+  - task_id: "setup_monitoring"
+    task_type: "python"
+    python_callable: "ml_pipeline_framework.airflow.operators.setup_model_monitoring"
+    description: "Setup monitoring for deployed model"
+    params:
+      model_name: "{{ var.value.model_name }}"
+      monitoring_frequency: "hourly"
+      drift_threshold: 0.1
+    
+  # Notification Tasks
+  - task_id: "notify_success"
+    task_type: "email"
+    to: ["{{ var.value.notification_email }}"]
+    subject: "Churn Prediction Model Pipeline Completed Successfully"
+    html_content: |
+      <h2>Model Training Pipeline Completed</h2>
+      <p>The churn prediction model has been successfully trained and deployed.</p>
+      <ul>
+        <li>Model Name: {{ var.value.model_name }}</li>
+        <li>Execution Date: {{ ds }}</li>
+        <li>Model Version: {{ ti.xcom_pull('register_model')['version'] }}</li>
+        <li>Model Accuracy: {{ ti.xcom_pull('model_evaluation')['accuracy'] }}</li>
+      </ul>
+    description: "Send success notification"
+    trigger_rule: "all_success"
+    
+  - task_id: "notify_failure"
+    task_type: "email"
+    to: ["{{ var.value.notification_email }}"]
+    subject: "Churn Prediction Model Pipeline Failed"
+    html_content: |
+      <h2>Model Training Pipeline Failed</h2>
+      <p>The churn prediction model pipeline has failed. Please check the logs.</p>
+      <ul>
+        <li>Execution Date: {{ ds }}</li>
+        <li>Failed Task: {{ ti.task_id }}</li>
+      </ul>
+    description: "Send failure notification"
+    trigger_rule: "one_failed"
+
+# Task dependencies
+dependencies:
+  # Data Processing Flow
+  - upstream: "extract_raw_data"
+    downstream: "data_quality_validation"
+  - upstream: "data_quality_validation"
+    downstream: "feature_engineering"
+  
+  # Training Flow
+  - upstream: "feature_engineering"
+    downstream: "train_model"
+  - upstream: "train_model"
+    downstream: "model_evaluation"
+  - upstream: "model_evaluation"
+    downstream: "model_validation"
+  
+  # Deployment Flow
+  - upstream: "model_validation"
+    downstream: "register_model"
+  - upstream: "register_model"
+    downstream: "deploy_model_staging"
+  - upstream: "deploy_model_staging"
+    downstream: "integration_tests"
+  - upstream: "integration_tests"
+    downstream: "deploy_model_production"
+  
+  # Monitoring Setup
+  - upstream: "deploy_model_production"
+    downstream: "setup_monitoring"
+  
+  # Notifications
+  - upstream: "setup_monitoring"
+    downstream: "notify_success"
+  - upstream: "extract_raw_data"
+    downstream: "notify_failure"
+  - upstream: "data_quality_validation"
+    downstream: "notify_failure"
+  - upstream: "feature_engineering"
+    downstream: "notify_failure"
+  - upstream: "train_model"
+    downstream: "notify_failure"
+  - upstream: "model_evaluation"
+    downstream: "notify_failure"
+  - upstream: "model_validation"
+    downstream: "notify_failure"
+  - upstream: "register_model"
+    downstream: "notify_failure"
+  - upstream: "deploy_model_staging"
+    downstream: "notify_failure"
+  - upstream: "integration_tests"
+    downstream: "notify_failure"
+  - upstream: "deploy_model_production"
+    downstream: "notify_failure"
+
+# Airflow connections needed
+connections:
+  - conn_id: "postgres_ml"
+    conn_type: "postgres"
+    host: "postgres-service.ml-pipeline.svc.cluster.local"
+    port: 5432
+    schema: "mlpipeline"
+    login: "mluser"
+    password: "mlpassword"
+    
+  - conn_id: "mlflow_tracking"
+    conn_type: "http"
+    host: "mlflow-service.ml-pipeline.svc.cluster.local"
+    port: 5000
+    
+  - conn_id: "spark_default"
+    conn_type: "spark"
+    host: "spark://spark-master:7077"
+    
+  - conn_id: "kubernetes_default"
+    conn_type: "kubernetes"
+    extra: |
+      {
+        "in_cluster": true,
+        "namespace": "ml-pipeline"
+      }
+    
+  - conn_id: "s3_artifacts"
+    conn_type: "aws"
+    extra: |
+      {
+        "aws_access_key_id": "your_access_key",
+        "aws_secret_access_key": "your_secret_key",
+        "region_name": "us-west-2"
+      }

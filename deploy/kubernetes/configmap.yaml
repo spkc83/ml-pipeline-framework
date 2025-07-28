@@ -1,0 +1,404 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-pipeline-config
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: config
+data:
+  # Application configuration
+  pipeline_config.yaml: |
+    data_source:
+      type: "postgres"
+      connection_string: "postgresql://mluser:mlpassword@postgres-service:5432/mlpipeline"
+      query_timeout: 300
+      pool_size: 10
+    
+    model:
+      type: "sklearn"
+      algorithm: "random_forest"
+      parameters:
+        n_estimators: 100
+        max_depth: 10
+        random_state: 42
+        n_jobs: -1
+    
+    preprocessing:
+      feature_elimination:
+        enabled: true
+        method: "backward"
+        cv_folds: 5
+        min_features: 10
+      imbalance_handling:
+        enabled: true
+        method: "smote"
+        sampling_strategy: "auto"
+      validation:
+        enabled: true
+        fail_on_error: false
+    
+    evaluation:
+      metrics: ["accuracy", "precision", "recall", "f1", "roc_auc"]
+      cross_validation:
+        enabled: true
+        cv_folds: 5
+    
+    tracking:
+      mlflow:
+        tracking_uri: "http://mlflow-service:5000"
+        experiment_name: "kubernetes_experiment"
+    
+    artifacts:
+      storage_type: "s3"
+      base_path: "s3://ml-artifacts/"
+    
+    logging:
+      level: "INFO"
+      enable_file: true
+      enable_json: true
+      enable_mlflow: true
+  
+  # Spark configuration
+  spark-defaults.conf: |
+    spark.master=k8s://https://kubernetes.default.svc:443
+    spark.kubernetes.container.image=ml-pipeline-framework:latest
+    spark.kubernetes.authenticate.driver.serviceAccountName=spark-driver
+    spark.kubernetes.executor.deleteOnTermination=true
+    spark.kubernetes.driver.pod.name=ml-pipeline-spark-driver
+    spark.kubernetes.namespace=ml-pipeline
+    
+    # Resource allocation
+    spark.driver.memory=2g
+    spark.executor.memory=2g
+    spark.executor.cores=2
+    spark.executor.instances=2
+    
+    # Performance optimizations
+    spark.sql.adaptive.enabled=true
+    spark.sql.adaptive.coalescePartitions.enabled=true
+    spark.serializer=org.apache.spark.serializer.KryoSerializer
+    
+    # Kubernetes specific
+    spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-data.options.claimName=ml-pipeline-data-pvc
+    spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-data.mount.path=/app/data
+    spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-data.options.claimName=ml-pipeline-data-pvc
+    spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-data.mount.path=/app/data
+  
+  # Log4j configuration
+  log4j.properties: |
+    log4j.rootLogger=INFO, console
+    log4j.appender.console=org.apache.log4j.ConsoleAppender
+    log4j.appender.console.target=System.out
+    log4j.appender.console.layout=org.apache.log4j.PatternLayout
+    log4j.appender.console.layout.ConversionPattern=%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n
+    
+    # Reduce verbosity
+    log4j.logger.org.apache.spark.repl.Main=WARN
+    log4j.logger.org.spark_project.jetty=WARN
+    log4j.logger.org.apache.parquet=ERROR
+    log4j.logger.parquet=ERROR
+  
+  # Prometheus monitoring configuration
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    scrape_configs:
+      - job_name: 'ml-pipeline'
+        static_configs:
+          - targets: ['ml-pipeline-service:8080']
+        metrics_path: /metrics
+        scrape_interval: 30s
+      
+      - job_name: 'spark-driver'
+        static_configs:
+          - targets: ['ml-pipeline-service:4040']
+        metrics_path: /metrics
+        scrape_interval: 30s
+      
+      - job_name: 'mlflow'
+        static_configs:
+          - targets: ['mlflow-service:5000']
+        metrics_path: /metrics
+        scrape_interval: 60s
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-pipeline-scripts
+  namespace: ml-pipeline
+  labels:
+    app: ml-pipeline-framework
+    component: scripts
+data:
+  # Training script
+  train.py: |
+    #!/usr/bin/env python3
+    """
+    Kubernetes training script for ML Pipeline Framework
+    """
+    import os
+    import sys
+    import logging
+    from pathlib import Path
+    
+    # Add the app directory to Python path
+    sys.path.insert(0, '/app')
+    
+    from ml_pipeline_framework import PipelineOrchestrator
+    from ml_pipeline_framework.utils import ConfigParser
+    
+    def main():
+        logging.basicConfig(level=logging.INFO)
+        logger = logging.getLogger(__name__)
+        
+        logger.info("Starting Kubernetes training job")
+        
+        # Load configuration
+        config_path = os.environ.get('CONFIG_PATH', '/app/configs/pipeline_config.yaml')
+        config = ConfigParser.from_yaml(config_path)
+        
+        # Initialize orchestrator
+        experiment_name = os.environ.get('EXPERIMENT_NAME', 'kubernetes_training')
+        run_name = os.environ.get('RUN_NAME', f'run_{int(time.time())}')
+        
+        orchestrator = PipelineOrchestrator(
+            config=config,
+            experiment_name=experiment_name,
+            run_name=run_name
+        )
+        
+        # Run training
+        try:
+            results = orchestrator.run_training()
+            logger.info(f"Training completed successfully: {results}")
+            
+            # Save model to persistent storage
+            model_path = f"/app/models/{experiment_name}_{run_name}"
+            orchestrator.save_pipeline(model_path)
+            logger.info(f"Model saved to: {model_path}")
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Training failed: {e}")
+            return 1
+    
+    if __name__ == "__main__":
+        import time
+        sys.exit(main())
+  
+  # Prediction script
+  predict.py: |
+    #!/usr/bin/env python3
+    """
+    Kubernetes prediction script for ML Pipeline Framework
+    """
+    import os
+    import sys
+    import logging
+    import pandas as pd
+    from pathlib import Path
+    
+    # Add the app directory to Python path
+    sys.path.insert(0, '/app')
+    
+    from ml_pipeline_framework import PipelineOrchestrator
+    
+    def main():
+        logging.basicConfig(level=logging.INFO)
+        logger = logging.getLogger(__name__)
+        
+        logger.info("Starting Kubernetes prediction job")
+        
+        # Load model
+        model_path = os.environ.get('MODEL_PATH', '/app/models/latest')
+        if not Path(model_path).exists():
+            logger.error(f"Model not found at: {model_path}")
+            return 1
+        
+        orchestrator = PipelineOrchestrator.from_saved_pipeline(model_path)
+        
+        # Load input data
+        input_path = os.environ.get('INPUT_PATH', '/app/data/input.csv')
+        if not Path(input_path).exists():
+            logger.error(f"Input data not found at: {input_path}")
+            return 1
+        
+        data = pd.read_csv(input_path)
+        logger.info(f"Loaded {len(data)} rows for prediction")
+        
+        # Generate predictions
+        try:
+            predictions = orchestrator.run_prediction(data, return_probabilities=True)
+            
+            # Save predictions
+            output_path = os.environ.get('OUTPUT_PATH', '/app/data/predictions.csv')
+            
+            if isinstance(predictions, tuple):
+                pred_classes, pred_probs = predictions
+                results_df = pd.DataFrame({
+                    'prediction': pred_classes,
+                    'probability': pred_probs[:, 1] if pred_probs.shape[1] > 1 else pred_probs[:, 0]
+                })
+            else:
+                results_df = pd.DataFrame({'prediction': predictions})
+            
+            results_df.to_csv(output_path, index=False)
+            logger.info(f"Predictions saved to: {output_path}")
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Prediction failed: {e}")
+            return 1
+    
+    if __name__ == "__main__":
+        sys.exit(main())
+  
+  # Health check script
+  healthcheck.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Running ML Pipeline health check..."
+    
+    # Check if Python is available
+    python --version
+    
+    # Check if ML Pipeline Framework is importable
+    python -c "import ml_pipeline_framework; print('ML Pipeline Framework OK')"
+    
+    # Check if Spark is available
+    python -c "from pyspark.sql import SparkSession; print('Spark OK')"
+    
+    # Check database connectivity if configured
+    if [ "${DB_HOST}" ]; then
+        echo "Checking database connectivity..."
+        python -c '
+        import psycopg2
+        import os
+        try:
+            conn = psycopg2.connect(
+                host=os.environ.get("DB_HOST"),
+                port=os.environ.get("DB_PORT", 5432),
+                database=os.environ.get("DB_NAME"),
+                user=os.environ.get("DB_USER"),
+                password=os.environ.get("DB_PASSWORD"),
+                connect_timeout=10
+            )
+            conn.close()
+            print("Database OK")
+        except Exception as e:
+            print(f"Database check failed: {e}")
+            exit(1)
+        '
+    fi
+    
+    # Check MLflow connectivity if configured
+    if [ "${MLFLOW_TRACKING_URI}" ]; then
+        echo "Checking MLflow connectivity..."
+        python -c '
+        import mlflow
+        import os
+        try:
+            mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))
+            experiments = mlflow.search_experiments()
+            print("MLflow OK")
+        except Exception as e:
+            print(f"MLflow check failed: {e}")
+            exit(1)
+        '
+    fi
+    
+    echo "All health checks passed!"
+  
+  # Monitoring script
+  monitor.py: |
+    #!/usr/bin/env python3
+    """
+    Monitoring script for ML Pipeline Framework in Kubernetes
+    """
+    import time
+    import logging
+    import json
+    from datetime import datetime
+    import psutil
+    import requests
+    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+    
+    # Configure logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    # Prometheus metrics
+    registry = CollectorRegistry()
+    
+    cpu_usage = Gauge('ml_pipeline_cpu_usage_percent', 'CPU usage percentage', registry=registry)
+    memory_usage = Gauge('ml_pipeline_memory_usage_bytes', 'Memory usage in bytes', registry=registry)
+    disk_usage = Gauge('ml_pipeline_disk_usage_percent', 'Disk usage percentage', registry=registry)
+    active_models = Gauge('ml_pipeline_active_models', 'Number of active models', registry=registry)
+    
+    def collect_system_metrics():
+        """Collect system performance metrics."""
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_usage.set(cpu_percent)
+        
+        # Memory usage
+        memory = psutil.virtual_memory()
+        memory_usage.set(memory.used)
+        
+        # Disk usage
+        disk = psutil.disk_usage('/')
+        disk_percent = (disk.used / disk.total) * 100
+        disk_usage.set(disk_percent)
+        
+        logger.info(f"System metrics - CPU: {cpu_percent}%, Memory: {memory.percent}%, Disk: {disk_percent}%")
+    
+    def collect_application_metrics():
+        """Collect application-specific metrics."""
+        try:
+            # Count active models (example)
+            model_count = len([f for f in Path('/app/models').glob('*') if f.is_dir()])
+            active_models.set(model_count)
+            
+            logger.info(f"Application metrics - Active models: {model_count}")
+            
+        except Exception as e:
+            logger.error(f"Failed to collect application metrics: {e}")
+    
+    def push_metrics():
+        """Push metrics to Prometheus pushgateway."""
+        try:
+            gateway = os.environ.get('PROMETHEUS_PUSHGATEWAY', 'pushgateway:9091')
+            job_name = os.environ.get('JOB_NAME', 'ml-pipeline')
+            
+            push_to_gateway(gateway, job=job_name, registry=registry)
+            logger.info("Metrics pushed to Prometheus")
+            
+        except Exception as e:
+            logger.error(f"Failed to push metrics: {e}")
+    
+    def main():
+        """Main monitoring loop."""
+        interval = int(os.environ.get('MONITOR_INTERVAL', 60))
+        
+        while True:
+            try:
+                collect_system_metrics()
+                collect_application_metrics()
+                push_metrics()
+                
+            except Exception as e:
+                logger.error(f"Monitoring error: {e}")
+            
+            time.sleep(interval)
+    
+    if __name__ == "__main__":
+        import os
+        from pathlib import Path
+        main()

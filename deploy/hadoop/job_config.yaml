@@ -1,0 +1,271 @@
+# Hadoop Job Configuration for ML Pipeline Framework
+
+# Basic job information
+name: "customer_churn_prediction_hadoop"
+description: "Customer churn prediction ML pipeline on Hadoop cluster"
+job_type: "training"  # training, prediction, data_processing, evaluation
+
+# Spark configuration
+spark_config:
+  # Resource allocation
+  num_executors: 20
+  executor_cores: 4
+  executor_memory: "8g"
+  driver_memory: "4g"
+  driver_cores: 2
+  
+  # Spark properties
+  spark.dynamicAllocation.enabled: true
+  spark.dynamicAllocation.minExecutors: 5
+  spark.dynamicAllocation.maxExecutors: 50
+  spark.dynamicAllocation.initialExecutors: 10
+  
+  # SQL optimization
+  spark.sql.adaptive.enabled: true
+  spark.sql.adaptive.coalescePartitions.enabled: true
+  spark.sql.adaptive.skewJoin.enabled: true
+  spark.sql.adaptive.localShuffleReader.enabled: true
+  
+  # Serialization
+  spark.serializer: "org.apache.spark.serializer.KryoSerializer"
+  spark.kryo.referenceTracking: false
+  spark.kryo.unsafe: true
+  
+  # Storage
+  spark.sql.warehouse.dir: "hdfs://namenode:9000/spark-warehouse"
+  spark.eventLog.enabled: true
+  spark.eventLog.dir: "hdfs://namenode:9000/spark-logs"
+  spark.history.fs.logDirectory: "hdfs://namenode:9000/spark-logs"
+  
+  # Network
+  spark.network.timeout: "300s"
+  spark.executor.heartbeatInterval: "30s"
+  
+  # Checkpointing
+  spark.sql.streaming.checkpointLocation: "hdfs://namenode:9000/checkpoints"
+
+# YARN configuration
+yarn_config:
+  queue: "ml-pipeline"
+  application_tags: ["ml-pipeline", "churn-prediction"]
+  max_app_attempts: 3
+  am_memory: "2g"
+  am_cores: 1
+
+# Data configuration
+data_config:
+  # Input data paths
+  training_data_path: "hdfs://namenode:9000/ml-pipeline/data/training/churn_data.parquet"
+  validation_data_path: "hdfs://namenode:9000/ml-pipeline/data/validation/churn_data.parquet"
+  prediction_input_path: "hdfs://namenode:9000/ml-pipeline/data/input/batch_data.parquet"
+  
+  # Output paths
+  model_output_path: "hdfs://namenode:9000/ml-pipeline/models"
+  predictions_output_path: "hdfs://namenode:9000/ml-pipeline/predictions"
+  artifacts_output_path: "hdfs://namenode:9000/ml-pipeline/artifacts"
+  
+  # Data format
+  input_format: "parquet"
+  output_format: "parquet"
+  
+  # Schema information
+  target_column: "churn"
+  feature_columns:
+    - "age"
+    - "tenure"
+    - "monthly_charges"
+    - "total_charges"
+    - "contract_type"
+    - "payment_method"
+    - "paperless_billing"
+    - "multiple_lines"
+    - "internet_service"
+    - "online_security"
+    - "online_backup"
+    - "device_protection"
+    - "tech_support"
+    - "streaming_tv"
+    - "streaming_movies"
+
+# Model configuration
+model_config:
+  algorithm: "random_forest"
+  hyperparameters:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    min_samples_leaf: 2
+    random_state: 42
+  
+  # Cross-validation
+  cv_folds: 5
+  test_size: 0.2
+  
+  # Model evaluation metrics
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "roc_auc"
+
+# MLflow configuration
+mlflow_config:
+  tracking_uri: "http://mlflow-server:5000"
+  experiment_name: "hadoop_churn_prediction"
+  artifact_location: "hdfs://namenode:9000/mlflow-artifacts"
+  
+  # Logging configuration
+  log_models: true
+  log_artifacts: true
+  log_metrics: true
+  log_params: true
+  
+  # Model registry
+  register_model: true
+  model_name: "churn_prediction_hadoop"
+  model_stage: "Staging"
+
+# Monitoring configuration
+monitoring_config:
+  enable_metrics: true
+  metrics_sink: "hdfs"
+  metrics_path: "hdfs://namenode:9000/ml-pipeline/metrics"
+  
+  # Performance monitoring
+  track_memory_usage: true
+  track_cpu_usage: true
+  track_io_operations: true
+  
+  # Data quality monitoring
+  enable_data_drift_detection: true
+  drift_threshold: 0.1
+  reference_data_path: "hdfs://namenode:9000/ml-pipeline/reference-data"
+
+# Security configuration
+security_config:
+  # Kerberos authentication
+  enable_kerberos: false
+  principal: ""
+  keytab: ""
+  
+  # SSL/TLS
+  enable_ssl: false
+  keystore_path: ""
+  keystore_password: ""
+  truststore_path: ""
+  truststore_password: ""
+  
+  # ACLs
+  enable_acls: true
+  job_user: "ml-pipeline"
+  job_group: "ml-team"
+
+# Environment configuration
+environment_config:
+  # Hadoop cluster details
+  namenode_url: "hdfs://namenode:9000"
+  resourcemanager_url: "resourcemanager:8032"
+  history_server_url: "historyserver:19888"
+  
+  # Python environment
+  python_version: "3.9"
+  conda_env: "ml-pipeline"
+  pip_requirements: "requirements-hadoop.txt"
+  
+  # Java settings
+  java_home: "/usr/lib/jvm/java-8-openjdk-amd64"
+  java_opts: "-Xmx2g"
+
+# Retry and failure handling
+retry_config:
+  max_retries: 3
+  retry_delay_seconds: 60
+  exponential_backoff: true
+  
+  # Failure handling
+  on_failure_action: "email"  # email, slack, webhook
+  notification_recipients:
+    - "ml-team@company.com"
+  
+  # Recovery options
+  enable_checkpointing: true
+  checkpoint_interval: "10 minutes"
+  recovery_mode: "automatic"
+
+# Job scheduling (for cron jobs)
+schedule_config:
+  # Training schedule
+  training_schedule: "0 2 * * 0"  # Weekly on Sunday at 2 AM
+  
+  # Prediction schedule  
+  prediction_schedule: "0 */6 * * *"  # Every 6 hours
+  
+  # Data processing schedule
+  data_processing_schedule: "0 1 * * *"  # Daily at 1 AM
+  
+  # Monitoring schedule
+  monitoring_schedule: "*/15 * * * *"  # Every 15 minutes
+
+# Resource limits
+resource_limits:
+  # Memory limits
+  max_driver_memory: "8g"
+  max_executor_memory: "16g"
+  
+  # CPU limits
+  max_executor_cores: 8
+  max_total_cores: 200
+  
+  # Disk limits
+  max_disk_usage: "500g"
+  temp_storage_path: "hdfs://namenode:9000/tmp/ml-pipeline"
+  
+  # Time limits
+  max_job_duration: "6h"
+  task_timeout: "30m"
+
+# Logging configuration
+logging_config:
+  log_level: "INFO"
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log destinations
+  log_to_console: true
+  log_to_file: true
+  log_file_path: "hdfs://namenode:9000/ml-pipeline/logs"
+  
+  # Log rotation
+  max_log_size: "100MB"
+  backup_count: 5
+  
+  # Structured logging
+  structured_logging: true
+  log_format_json: true
+
+# Custom configurations per job type
+job_specific_config:
+  training:
+    additional_jars: []
+    additional_py_files: []
+    custom_spark_conf:
+      spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes: "256MB"
+      spark.sql.adaptive.advisoryPartitionSizeInBytes: "128MB"
+  
+  prediction:
+    batch_size: 10000
+    prediction_timeout: "1h"
+    output_compression: "snappy"
+  
+  data_processing:
+    repartition_columns: ["customer_id"]
+    cache_intermediate_results: true
+    broadcast_threshold: "200MB"
+  
+  evaluation:
+    evaluation_metrics:
+      - "confusion_matrix"
+      - "classification_report"
+      - "feature_importance"
+    generate_plots: true
+    plot_output_path: "hdfs://namenode:9000/ml-pipeline/plots"

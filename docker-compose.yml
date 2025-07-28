@@ -1,0 +1,246 @@
+# Docker Compose for ML Pipeline Framework
+# Provides complete development environment with all services
+
+version: '3.8'
+
+services:
+  # ML Pipeline Framework - CPU version
+  ml-pipeline-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: cpu
+        PYTHON_VERSION: 3.9
+        SPARK_VERSION: 3.4.1
+    image: ml-pipeline-framework:cpu
+    container_name: ml-pipeline-cpu
+    hostname: ml-pipeline-cpu
+    ports:
+      - "8080:8080"   # Spark Master UI
+      - "8081:8081"   # Spark Worker UI  
+      - "4040:4040"   # Spark Application UI
+      - "8888:8888"   # Jupyter Lab
+      - "5000:5000"   # MLflow UI
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./notebooks:/app/notebooks
+    environment:
+      - EXECUTION_MODE=default
+      - SPARK_MASTER_URL=spark://ml-pipeline-cpu:7077
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=mlpipeline
+      - DB_USER=mluser
+      - DB_PASSWORD=mlpassword
+    depends_on:
+      - postgres
+      - mlflow
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "/healthcheck.py"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+
+  # ML Pipeline Framework - GPU version (uncomment if GPU available)
+  # ml-pipeline-gpu:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     args:
+  #       BUILD_TYPE: gpu
+  #       PYTHON_VERSION: 3.9
+  #       SPARK_VERSION: 3.4.1
+  #   image: ml-pipeline-framework:gpu
+  #   container_name: ml-pipeline-gpu
+  #   runtime: nvidia
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #     - EXECUTION_MODE=default
+  #   ports:
+  #     - "8082:8080"
+  #     - "8083:8081"
+  #     - "4041:4040"
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./configs:/app/configs
+  #     - ./artifacts:/app/artifacts
+  #   networks:
+  #     - ml-network
+
+  # Jupyter Lab service
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: cpu
+    image: ml-pipeline-framework:cpu
+    container_name: ml-jupyter
+    ports:
+      - "8889:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+      - ./configs:/app/configs
+      - ./artifacts:/app/artifacts
+    environment:
+      - EXECUTION_MODE=jupyter
+      - JUPYTER_ENABLE_LAB=yes
+    networks:
+      - ml-network
+    restart: unless-stopped
+
+  # MLflow Tracking Server
+  mlflow:
+    image: python:3.9-slim
+    container_name: mlflow-server
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - ./artifacts:/mlflow/artifacts
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://mluser:mlpassword@postgres:5432/mlflow
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    command: >
+      bash -c "
+        pip install mlflow psycopg2-binary &&
+        mlflow server 
+          --backend-store-uri postgresql://mluser:mlpassword@postgres:5432/mlflow
+          --default-artifact-root /mlflow/artifacts
+          --host 0.0.0.0
+          --port 5000
+      "
+    depends_on:
+      - postgres
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14
+    container_name: ml-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    environment:
+      - POSTGRES_DB=mlpipeline
+      - POSTGRES_USER=mluser
+      - POSTGRES_PASSWORD=mlpassword
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mluser -d mlpipeline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: ml-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # MinIO for S3-compatible storage (optional)
+  minio:
+    image: minio/minio:latest
+    container_name: ml-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin123
+    command: server /data --console-address ":9001"
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Grafana for monitoring (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ml-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - ml-network
+    restart: unless-stopped
+
+  # Prometheus for metrics collection (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ml-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - ml-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  grafana_data:
+  prometheus_data:
+
+networks:
+  ml-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

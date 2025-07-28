@@ -1,0 +1,809 @@
+# AutoML Configuration for ML Pipeline Framework
+# Comprehensive automated machine learning configuration with algorithm selection,
+# hyperparameter optimization, time budgets, and interpretability requirements
+
+automl_settings:
+  name: "fraud-detection-automl"
+  version: "2.0.0"
+  description: "Fraud detection AutoML with business metric optimization"
+  random_state: 42
+  
+  # Search strategy configuration
+  search_strategy: "bayesian"  # grid, random, bayesian, adaptive
+  
+  # General AutoML settings - Enhanced
+  general:
+    max_total_time: 3600  # Total time budget in seconds (1 hour default)
+    max_eval_time: 300    # Maximum time per model evaluation in seconds
+    ensemble: true        # Enable ensemble methods
+    stack_models: true    # Enable model stacking
+    early_stopping: true  # Early stopping for optimization
+    n_jobs: -1           # Use all available cores
+    
+    # Cross-validation settings
+    cv_folds: 5
+    cv_method: "stratified_kfold"  # stratified_kfold, time_series_split, group_kfold
+    test_size: 0.2
+    validation_size: 0.15
+    
+    # Memory and compute limits
+    memory_limit: 8192  # MB
+    tmp_folder: "./artifacts/automl_tmp"
+    delete_tmp_folder_after_terminate: true
+    
+    # Fraud-specific settings
+    preserve_class_imbalance: true
+    optimize_for_fraud: true
+    business_metric_focus: true
+
+# Algorithm Selection Configuration
+algorithm_selection:
+  # Enable/disable algorithm families
+  enable_linear: true
+  enable_tree_based: true
+  enable_ensemble: true
+  enable_neural_networks: true
+  enable_naive_bayes: true
+  enable_svm: true
+  enable_neighbors: true
+  
+  # Classification algorithms
+  classification:
+    # Linear models
+    logistic_regression:
+      enabled: true
+      max_time: 300
+      include_preprocessors: ["no_preprocessing", "standard_scaler", "robust_scaler"]
+      
+    ridge_classifier:
+      enabled: true
+      max_time: 180
+      
+    linear_discriminant_analysis:
+      enabled: true
+      max_time: 120
+    
+    # Tree-based models
+    decision_tree:
+      enabled: true
+      max_time: 240
+      
+    random_forest:
+      enabled: true
+      max_time: 600
+      
+    extra_trees:
+      enabled: true
+      max_time: 600
+      
+    # Gradient boosting
+    xgboost:
+      enabled: true
+      max_time: 900
+      use_gpu: false
+      
+    lightgbm:
+      enabled: true
+      max_time: 900
+      use_gpu: false
+      
+    catboost:
+      enabled: true
+      max_time: 900
+      use_gpu: false
+      
+    gradient_boosting:
+      enabled: true
+      max_time: 600
+    
+    # Neural networks
+    mlp_classifier:
+      enabled: true
+      max_time: 1200
+      
+    # Support Vector Machines
+    svm_linear:
+      enabled: true
+      max_time: 600
+      
+    svm_rbf:
+      enabled: false  # Disabled by default due to scalability
+      max_time: 900
+    
+    # Naive Bayes
+    gaussian_nb:
+      enabled: true
+      max_time: 60
+      
+    multinomial_nb:
+      enabled: true
+      max_time: 60
+    
+    # K-Nearest Neighbors
+    k_neighbors:
+      enabled: true
+      max_time: 300
+      
+    # Ensemble methods
+    voting_classifier:
+      enabled: true
+      max_time: 1800
+      
+    stacking_classifier:
+      enabled: true
+      max_time: 2400
+  
+  # Regression algorithms
+  regression:
+    # Linear models
+    linear_regression:
+      enabled: true
+      max_time: 180
+      
+    ridge_regression:
+      enabled: true
+      max_time: 180
+      
+    lasso_regression:
+      enabled: true
+      max_time: 300
+      
+    elastic_net:
+      enabled: true
+      max_time: 300
+    
+    # Tree-based models
+    decision_tree_regressor:
+      enabled: true
+      max_time: 240
+      
+    random_forest_regressor:
+      enabled: true
+      max_time: 600
+      
+    extra_trees_regressor:
+      enabled: true
+      max_time: 600
+    
+    # Gradient boosting
+    xgboost_regressor:
+      enabled: true
+      max_time: 900
+      use_gpu: false
+      
+    lightgbm_regressor:
+      enabled: true
+      max_time: 900
+      use_gpu: false
+      
+    catboost_regressor:
+      enabled: true
+      max_time: 900
+      use_gpu: false
+      
+    gradient_boosting_regressor:
+      enabled: true
+      max_time: 600
+    
+    # Neural networks
+    mlp_regressor:
+      enabled: true
+      max_time: 1200
+    
+    # Support Vector Machines
+    svr_linear:
+      enabled: true
+      max_time: 600
+      
+    svr_rbf:
+      enabled: false
+      max_time: 900
+    
+    # K-Nearest Neighbors
+    k_neighbors_regressor:
+      enabled: true
+      max_time: 300
+
+# Hyperparameter Search Spaces - Comprehensive Configuration
+hyperparameter_spaces:
+  # Search strategy
+  search_strategy: "bayesian"  # random, grid, bayesian, hyperband
+  n_iterations: 100
+  n_initial_points: 10
+  acquisition_function: "ei"  # ei, pi, lcb
+  
+  # Fraud-specific hyperparameter optimization
+  fraud_optimization: true
+  class_weight_optimization: true
+  
+  # Linear models - Enhanced for fraud detection
+  logistic_regression:
+    C: [0.001, 0.01, 0.1, 1, 10, 100]
+    penalty: ["l1", "l2", "elasticnet"]
+    solver: ["liblinear", "saga"]
+    max_iter: [1000, 2000, 5000]
+    class_weight: ["balanced", null]
+    l1_ratio: [0.1, 0.3, 0.5, 0.7, 0.9]  # For elasticnet
+  
+  ridge_classifier:
+    alpha:
+      type: "log_uniform"
+      low: 1e-4
+      high: 1e2
+    solver:
+      type: "categorical"
+      choices: ["auto", "svd", "cholesky", "lsqr", "saga"]
+  
+  # Tree-based models - Enhanced for fraud detection
+  random_forest:
+    n_estimators: [100, 200, 500]
+    max_depth: [5, 10, 20, null]
+    min_samples_split: [2, 10, 20]
+    min_samples_leaf: [1, 5, 10]
+    max_features: ["sqrt", "log2", 0.5]
+    class_weight: ["balanced", "balanced_subsample", null]
+    bootstrap: [true, false]
+    oob_score: [true, false]
+  
+  extra_trees:
+    n_estimators:
+      type: "int_uniform"
+      low: 10
+      high: 500
+    max_depth:
+      type: "int_uniform"
+      low: 1
+      high: 20
+    min_samples_split:
+      type: "int_uniform"
+      low: 2
+      high: 20
+    min_samples_leaf:
+      type: "int_uniform"
+      low: 1
+      high: 20
+    max_features:
+      type: "categorical"
+      choices: ["sqrt", "log2", "auto"]
+  
+  # XGBoost - Optimized for fraud detection
+  xgboost:
+    n_estimators: [100, 300, 500]
+    max_depth: [3, 6, 10]
+    learning_rate: [0.01, 0.1, 0.3]
+    subsample: [0.6, 0.8, 1.0]
+    colsample_bytree: [0.6, 0.8, 1.0]
+    scale_pos_weight: "auto"  # for imbalanced data
+    reg_alpha: [0, 0.1, 1.0]
+    reg_lambda: [1, 1.5, 2.0]
+    gamma: [0, 0.1, 0.5]
+    min_child_weight: [1, 3, 5]
+  
+  # LightGBM - Enhanced for fraud detection
+  lightgbm:
+    n_estimators: [100, 300, 500]
+    num_leaves: [31, 62, 127]
+    learning_rate: [0.01, 0.1, 0.3]
+    feature_fraction: [0.6, 0.8, 1.0]
+    bagging_fraction: [0.6, 0.8, 1.0]
+    categorical_features: "auto"
+    class_weight: ["balanced", null]
+    reg_alpha: [0, 0.1, 1.0]
+    reg_lambda: [0, 0.1, 1.0]
+    min_child_samples: [20, 50, 100]
+    subsample_freq: [1, 5, 10]
+  
+  # CatBoost - Enhanced for fraud detection
+  catboost:
+    iterations: [100, 500, 1000]
+    depth: [4, 6, 8]
+    learning_rate: [0.01, 0.05, 0.1]
+    l2_leaf_reg: [1, 3, 5, 7]
+    auto_class_weights: "Balanced"
+    cat_features: "auto"
+    border_count: [32, 64, 128]
+    bagging_temperature: [0, 0.5, 1]
+    random_strength: [1, 2, 3]
+  
+  # Neural Networks
+  mlp_classifier:
+    hidden_layer_sizes:
+      type: "categorical"
+      choices: [[50], [100], [50, 50], [100, 50], [100, 100], [200, 100], [300, 200, 100]]
+    activation:
+      type: "categorical"
+      choices: ["relu", "tanh", "logistic"]
+    solver:
+      type: "categorical"
+      choices: ["adam", "lbfgs"]
+    alpha:
+      type: "log_uniform"
+      low: 1e-7
+      high: 1e-1
+    learning_rate:
+      type: "categorical"
+      choices: ["constant", "invscaling", "adaptive"]
+    max_iter:
+      type: "int_uniform"
+      low: 200
+      high: 1000
+  
+  # Support Vector Machines
+  svm_linear:
+    C:
+      type: "log_uniform"
+      low: 1e-4
+      high: 1e4
+    loss:
+      type: "categorical"
+      choices: ["hinge", "squared_hinge"]
+    dual:
+      type: "categorical"
+      choices: [true, false]
+  
+  # K-Nearest Neighbors
+  k_neighbors:
+    n_neighbors:
+      type: "int_uniform"
+      low: 1
+      high: 50
+    weights:
+      type: "categorical"
+      choices: ["uniform", "distance"]
+    algorithm:
+      type: "categorical"
+      choices: ["auto", "ball_tree", "kd_tree", "brute"]
+    p:
+      type: "int_uniform"
+      low: 1
+      high: 2
+
+# Time Budget Configuration
+time_budgets:
+  # Overall time management
+  total_budget: 3600  # seconds (1 hour)
+  
+  # Time allocation strategy
+  allocation_strategy: "dynamic"  # fixed, dynamic, adaptive
+  
+  # Per-algorithm time budgets (seconds)
+  algorithm_budgets:
+    # Quick algorithms (high priority)
+    gaussian_nb: 60
+    multinomial_nb: 60
+    linear_discriminant_analysis: 120
+    ridge_classifier: 180
+    logistic_regression: 300
+    
+    # Medium algorithms
+    decision_tree: 240
+    k_neighbors: 300
+    svm_linear: 600
+    gradient_boosting: 600
+    random_forest: 600
+    extra_trees: 600
+    
+    # Expensive algorithms
+    xgboost: 900
+    lightgbm: 900
+    catboost: 900
+    svm_rbf: 900
+    mlp_classifier: 1200
+    
+    # Ensemble methods
+    voting_classifier: 1800
+    stacking_classifier: 2400
+  
+  # Early stopping criteria
+  early_stopping:
+    enabled: true
+    patience: 10  # Number of iterations without improvement
+    min_delta: 0.001  # Minimum improvement threshold
+    metric: "cv_score"  # cv_score, validation_score
+  
+  # Resource limits per model
+  model_limits:
+    max_memory_mb: 2048
+    max_cpu_time: 600
+    max_wall_time: 900
+
+# Interpretability Requirements
+interpretability:
+  # Mandatory interpretability methods
+  mandatory_methods:
+    - "feature_importance"
+    - "shap_values"
+    - "lime_explanations"
+    - "permutation_importance"
+  
+  # Global interpretability
+  global_interpretability:
+    feature_importance:
+      enabled: true
+      method: "permutation"  # permutation, model_specific, drop_column
+      n_repeats: 10
+      scoring_metric: "roc_auc"
+    
+    shap_analysis:
+      enabled: true
+      explainer_type: "auto"  # auto, tree, linear, kernel, deep
+      max_samples: 1000
+      plots:
+        - "summary_plot"
+        - "bar_plot"
+        - "heatmap"
+        - "partial_dependence"
+    
+    functional_anova:
+      enabled: true
+      max_interactions: 2
+      sample_size: 1000
+    
+    ale_plots:
+      enabled: true
+      features: "auto"  # auto, top_10, all, [list of features]
+      sample_size: 1000
+  
+  # Local interpretability
+  local_interpretability:
+    lime_explanations:
+      enabled: true
+      mode: "tabular"
+      sample_size: 100
+      feature_selection: "auto"
+      num_features: 10
+    
+    anchors:
+      enabled: true
+      threshold: 0.95
+      max_anchor_size: 5
+      sample_size: 1000
+    
+    counterfactuals:
+      enabled: true
+      method: "dice"  # dice, wachter, prototype
+      num_cfs: 5
+      proximity_weight: 0.5
+      diversity_weight: 1.0
+  
+  # Trust and uncertainty
+  uncertainty_estimation:
+    enabled: true
+    methods:
+      - "prediction_intervals"
+      - "model_confidence"
+      - "ensemble_variance"
+    
+    calibration:
+      enabled: true
+      method: "platt"  # platt, isotonic
+      cv_folds: 5
+  
+  # Model simplification
+  model_simplification:
+    rule_extraction:
+      enabled: true
+      max_rules: 20
+      min_coverage: 0.1
+      min_precision: 0.8
+    
+    surrogate_models:
+      enabled: true
+      surrogate_type: "decision_tree"  # decision_tree, linear_model
+      max_depth: 5
+      fidelity_threshold: 0.9
+
+# Business Metrics and Weights
+business_metrics:
+  # Primary business objectives
+  primary_objective: "maximize_revenue"  # maximize_revenue, minimize_cost, maximize_f1
+  
+  # Cost matrix for classification
+  cost_matrix:
+    # For binary classification: [TN, FP, FN, TP]
+    binary_classification:
+      true_negative_value: 0     # No cost for correct rejection
+      false_positive_cost: 100   # Cost of false alarm
+      false_negative_cost: 500   # Cost of missed detection
+      true_positive_value: 1000  # Revenue from correct detection
+  
+  # Business metric weights
+  metric_weights:
+    accuracy: 0.2
+    precision: 0.3
+    recall: 0.3
+    f1_score: 0.2
+    roc_auc: 0.4
+    business_value: 0.6  # Custom business value calculation
+  
+  # ROI calculation
+  roi_calculation:
+    implementation_cost: 50000    # One-time implementation cost
+    maintenance_cost_annual: 60000  # Annual maintenance cost
+    false_positive_cost_per_case: 100
+    false_negative_cost_per_case: 500
+    true_positive_value_per_case: 1000
+    expected_cases_per_year: 10000
+  
+  # Threshold optimization
+  threshold_optimization:
+    enabled: true
+    optimize_for: "business_value"  # business_value, f1_score, youden_index
+    search_range: [0.1, 0.9]
+    search_resolution: 0.01
+
+# Output Preferences
+output:
+  # Model selection criteria
+  model_selection:
+    primary_metric: "business_value"  # roc_auc, f1_score, business_value
+    secondary_metrics: ["roc_auc", "f1_score", "precision", "recall"]
+    min_improvement_threshold: 0.01
+    ensemble_preference: true
+  
+  # Results format
+  results_format:
+    leaderboard: true
+    detailed_reports: true
+    model_comparison: true
+    interpretability_dashboard: true
+    
+    export_formats: ["json", "html", "pickle"]
+    include_predictions: true
+    include_feature_importance: true
+    include_hyperparameters: true
+  
+  # Artifact storage
+  artifacts:
+    save_all_models: false  # Save only top models to save space
+    save_top_n_models: 5
+    save_ensemble_models: true
+    save_preprocessors: true
+    save_interpretability_data: true
+    
+    compression: true
+    versioning: true
+    metadata_tracking: true
+  
+  # Visualization preferences
+  visualizations:
+    performance_plots: true
+    interpretability_plots: true
+    business_impact_plots: true
+    
+    plot_formats: ["png", "svg"]
+    plot_dpi: 300
+    interactive_plots: true
+  
+  # Reporting
+  reporting:
+    executive_summary: true
+    technical_details: true
+    business_recommendations: true
+    model_cards: true
+    
+    include_data_profiling: true
+    include_feature_analysis: true
+    include_model_comparison: true
+    include_deployment_guide: true
+
+# Advanced Configuration
+advanced:
+  # Meta-learning
+  meta_learning:
+    enabled: false
+    use_openml: false
+    similarity_threshold: 0.8
+    min_datasets: 5
+    transfer_learning: true
+    warm_start_models: true
+  
+  # Multi-objective optimization
+  multi_objective:
+    enabled: true
+    objectives: ["business_value", "interpretability", "training_time", "fairness"]
+    optimization_method: "nsga2"  # nsga2, spea2, weighted_sum
+    pareto_front_analysis: true
+    trade_off_visualization: true
+  
+  # Automated feature engineering
+  automated_feature_engineering:
+    enabled: true
+    max_new_features: 50
+    include_polynomial: true
+    include_interactions: true
+    include_domain_specific: true
+    feature_selection_methods: ["mutual_info", "rfe", "lasso"]
+    automated_encoding: true
+    temporal_features: true
+  
+  # Model lifecycle management
+  lifecycle_management:
+    versioning: true
+    experiment_tracking: true
+    model_registry: true
+    automated_deployment: false
+    monitoring_setup: true
+    model_governance: true
+    approval_workflow: true
+    compliance_tracking: true
+  
+  # Distributed computing
+  distributed:
+    enabled: false
+    framework: "dask"  # dask, ray, spark
+    n_workers: 4
+    memory_per_worker: "2GB"
+    cluster_scaling: "auto"
+    fault_tolerance: true
+    
+  # GPU acceleration
+  gpu_acceleration:
+    enabled: false
+    cuda_devices: [0]
+    frameworks: ["xgboost", "lightgbm", "catboost"]
+    mixed_precision: true
+    memory_optimization: true
+
+# Fraud-Specific AutoML Configuration
+fraud_specific:
+  # Fraud detection optimizations
+  imbalance_aware: true
+  cost_sensitive: true
+  threshold_optimization: true
+  
+  # Business constraints
+  regulatory_compliance: ["sr11-7", "gdpr", "fair_lending"]
+  explainability_requirements: "high"
+  latency_constraints: 100  # milliseconds
+  
+  # Fraud-specific metrics
+  primary_metrics:
+    - "precision_at_1_percent"
+    - "precision_at_5_percent" 
+    - "recall_at_fixed_fpr"
+    - "expected_value"
+  
+  # Alert tuning
+  false_positive_tolerance: 0.05
+  minimum_recall: 0.50
+  business_impact_weight: 0.7
+
+# Enterprise Security and Compliance
+security:
+  # Data security
+  data_encryption: true
+  model_encryption: true
+  secure_communication: true
+  
+  # Access control
+  authentication_required: true
+  role_based_access: true
+  audit_logging: true
+  
+  # Compliance frameworks
+  compliance_frameworks: ["gdpr", "sox", "pci_dss"]
+  data_residency: "EU"  # For GDPR compliance
+  retention_policy: "7_years"
+  
+  # Model governance
+  model_approval_required: true
+  bias_testing_mandatory: true
+  fairness_validation: true
+  explainability_reports: true
+
+# Resource Management and Scaling
+resource_management:
+  # Compute resources
+  max_cpu_cores: 16
+  max_memory_gb: 64
+  preferred_instance_type: "compute_optimized"
+  
+  # Auto-scaling
+  auto_scaling:
+    enabled: true
+    min_workers: 1
+    max_workers: 10
+    scale_up_threshold: 0.8
+    scale_down_threshold: 0.3
+    cooldown_period: 300  # seconds
+  
+  # Cost optimization
+  cost_optimization:
+    enabled: true
+    max_budget_per_run: 100  # USD
+    use_spot_instances: true
+    auto_terminate_idle: true
+    idle_timeout: 1800  # seconds
+
+# Integration and API Configuration
+integrations:
+  # MLflow integration
+  mlflow:
+    enabled: true
+    tracking_uri: "${MLFLOW_TRACKING_URI:http://localhost:5000}"
+    experiment_name: "fraud-detection-automl"
+    model_registry: true
+    
+  # Weights & Biases integration
+  wandb:
+    enabled: false
+    project: "fraud-detection"
+    entity: "ml-team"
+    
+  # Slack notifications
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channels: ["#ml-alerts", "#fraud-team"]
+    
+  # Email notifications
+  email:
+    enabled: true
+    smtp_server: "${SMTP_SERVER}"
+    recipients: ["${ML_TEAM_EMAIL}"]
+    
+  # API endpoints
+  api:
+    model_serving: true
+    prediction_endpoint: "/predict"
+    explanation_endpoint: "/explain"
+    health_check: "/health"
+    metrics_endpoint: "/metrics"
+
+# Experiment Design and A/B Testing
+experimentation:
+  # A/B testing framework
+  ab_testing:
+    enabled: true
+    control_model: "current_production"
+    test_traffic_percentage: 5
+    minimum_sample_size: 1000
+    statistical_power: 0.8
+    significance_level: 0.05
+    
+  # Champion-challenger setup
+  champion_challenger:
+    enabled: true
+    challenger_models: 3
+    evaluation_period: "7_days"
+    automatic_promotion: false
+    
+  # Experiment tracking
+  experiment_tracking:
+    track_hyperparameters: true
+    track_metrics: true
+    track_artifacts: true
+    track_code_version: true
+    track_data_version: true
+
+# Quality Assurance and Testing
+quality_assurance:
+  # Model validation
+  validation_tests:
+    - "statistical_significance"
+    - "performance_degradation"
+    - "bias_detection"
+    - "fairness_metrics"
+    - "robustness_testing"
+    
+  # Data validation
+  data_validation:
+    schema_validation: true
+    distribution_checks: true
+    outlier_detection: true
+    missing_value_checks: true
+    
+  # Model testing
+  model_testing:
+    unit_tests: true
+    integration_tests: true
+    performance_tests: true
+    load_tests: true
+    
+  # Continuous monitoring
+  continuous_monitoring:
+    model_drift: true
+    data_drift: true
+    performance_monitoring: true
+    fairness_monitoring: true

@@ -1,0 +1,358 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel", "setuptools-scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-pipeline-framework"
+dynamic = ["version"]
+description = "Enterprise-grade ML Pipeline Framework for Production Environments"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Your Organization", email = "ml-team@your-org.com"},
+]
+maintainers = [
+    {name = "ML Engineering Team", email = "ml-engineering@your-org.com"},
+]
+keywords = [
+    "machine-learning", "mlops", "automl", "pipeline", "enterprise",
+    "production", "fraud-detection", "interpretability", "fairness",
+    "compliance", "monitoring", "kubernetes", "docker", "cloud"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
+    "Typing :: Typed",
+]
+requires-python = ">=3.8"
+dependencies = [
+    # Core data processing
+    "pandas>=1.5.0",
+    "numpy>=1.21.0",
+    "polars>=0.18.0",
+    "duckdb>=0.8.0",
+    
+    # Machine learning core
+    "scikit-learn>=1.2.0",
+    "xgboost>=1.7.0",
+    "lightgbm>=3.3.0",
+    "catboost>=1.1.0",
+    
+    # Model interpretability
+    "shap>=0.41.0",
+    "lime>=0.2.0",
+    "eli5>=0.13.0",
+    
+    # Configuration and utilities
+    "pyyaml>=6.0",
+    "hydra-core>=1.2.0",
+    "omegaconf>=2.2.0",
+    "python-dotenv>=0.20.0",
+    
+    # Monitoring and logging
+    "mlflow>=2.0.0",
+    "structlog>=22.0.0",
+    
+    # Web framework
+    "fastapi>=0.85.0",
+    "uvicorn>=0.18.0",
+    "pydantic>=1.10.0",
+    
+    # Visualization
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "plotly>=5.10.0",
+    
+    # Utilities
+    "click>=8.1.0",
+    "tqdm>=4.64.0",
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-mock>=3.0.0",
+    "pytest-timeout>=2.0.0",
+    "pytest-benchmark>=4.0.0",
+    
+    # Code quality
+    "black>=22.0.0",
+    "isort>=5.0.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    "safety>=2.0.0",
+    "pre-commit>=2.0.0",
+    
+    # Documentation
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=0.18.0",
+]
+
+cloud = [
+    # AWS
+    "boto3>=1.24.0",
+    "s3fs>=2022.8.0",
+    
+    # GCP
+    "google-cloud-storage>=2.5.0",
+    "google-cloud-bigquery>=3.3.0",
+    "gcsfs>=2022.8.0",
+    
+    # Azure
+    "azure-storage-blob>=12.12.0",
+    "azure-identity>=1.10.0",
+    "adlfs>=2022.8.0",
+]
+
+spark = [
+    "pyspark>=3.3.0",
+    "delta-spark>=2.1.0",
+]
+
+gpu = [
+    "cupy-cuda11x>=11.0.0",
+    "xgboost[gpu]>=1.7.0",
+    "lightgbm[gpu]>=3.3.0",
+]
+
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "sphinx-autodoc-typehints>=1.0.0",
+    "myst-parser>=0.18.0",
+    "nbsphinx>=0.8.0",
+    "sphinx-copybutton>=0.5.0",
+]
+
+all = [
+    "ml-pipeline-framework[dev,cloud,spark,docs]",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/ml-pipeline-framework"
+Documentation = "https://ml-pipeline-framework.readthedocs.io/"
+Repository = "https://github.com/your-org/ml-pipeline-framework"
+Issues = "https://github.com/your-org/ml-pipeline-framework/issues"
+Changelog = "https://github.com/your-org/ml-pipeline-framework/blob/main/CHANGELOG.md"
+
+[project.scripts]
+ml-pipeline = "src.cli:main"
+
+[tool.setuptools]
+packages = {find = {where = ["src"]}}
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = {attr = "__version__.__version__"}
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json", "*.toml", "*.cfg"]
+
+# Tool configurations
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src"]
+known_third_party = [
+    "numpy", "pandas", "sklearn", "xgboost", "lightgbm", "catboost",
+    "shap", "lime", "mlflow", "fastapi", "pydantic", "click", "tqdm"
+]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",  # whitespace before ':'
+    "E501",  # line too long (handled by black)
+    "W503",  # line break before binary operator
+    "W504",  # line break after binary operator
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+per-file-ignores = [
+    "__init__.py:F401",  # imported but unused
+    "tests/*:S101",      # use of assert
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas.*",
+    "numpy.*",
+    "sklearn.*",
+    "xgboost.*",
+    "lightgbm.*",
+    "catboost.*",
+    "shap.*",
+    "lime.*",
+    "mlflow.*",
+    "plotly.*",
+    "seaborn.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings",
+    "--tb=short",
+]
+testpaths = ["tests"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "e2e: End-to-end tests",
+    "spark: Spark-related tests",
+    "slow: Slow-running tests",
+    "performance: Performance/benchmark tests",
+    "gpu: GPU-dependent tests",
+    "cloud: Cloud-dependent tests",
+]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/conftest.py",
+    "*/__init__.py",
+    "*/setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+precision = 2
+show_missing = true
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist"]
+skips = ["B101", "B601"]  # Skip assert_used and shell_injection for tests
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "*/test_*.py", "*/tests/*"]
+
+[tool.vulture]
+exclude = ["tests/", "build/", "dist/"]
+ignore_decorators = ["@app.route", "@pytest.fixture", "@click.command"]
+ignore_names = ["_*", "__*__"]
+min_confidence = 80
+
+[tool.radon]
+exclude = "tests/*,build/*,dist/*"
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = false
+ignore-magic = false
+ignore-semiprivate = false
+ignore-private = false
+ignore-property-decorators = false
+ignore-module = false
+fail-under = 80
+exclude = ["setup.py", "docs", "build", "tests"]
+verbose = 0
+quiet = false
+whitelist-regex = []
+color = true
+
+[tool.pydocstyle]
+inherit = false
+convention = "google"
+match-dir = "(?!tests).*"
+match = "(?!test_).*\\.py"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "v$version"
+update_changelog_on_bump = true
+version_files = [
+    "src/__version__.py",
+    "pyproject.toml:version"
+]

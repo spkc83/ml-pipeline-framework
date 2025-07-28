@@ -1,0 +1,696 @@
+# ML Pipeline Framework Configuration Template v2.0
+# Environment variables can be substituted using ${VAR_NAME} syntax
+
+pipeline:
+  name: "ml-pipeline-framework"
+  version: "2.0.0"
+  description: "Production-grade ML pipeline with AutoML and comprehensive interpretability"
+  environment: "${ENVIRONMENT:dev}"  # dev, staging, prod
+  log_level: "${LOG_LEVEL:INFO}"
+  compliance_mode: true
+  security_level: "high"
+
+# Data Source Configuration - CSV as default for enterprise flexibility
+data_source:
+  type: "csv"  # Primary: csv, postgresql, mysql, snowflake, redshift, hive
+  
+  # CSV Configuration (Primary) - Enhanced for production
+  csv_options:
+    file_paths:
+      - "${DATA_DIR:./data}/credit_card_fraud_data.csv"
+      - "${DATA_DIR:./data}/historical/*.csv"  # Support glob patterns
+    separator: ","  # Auto-detected if null
+    encoding: "utf-8"  # Auto-detected if null
+    compression: null  # Options: gzip, zip, bz2, xz, null
+    chunk_size: 50000  # Increased for better performance
+    header_row: 0  # Row containing column headers
+    validate_headers: true  # Check header consistency across files
+    optimize_dtypes: true  # Automatically optimize data types
+    memory_map: true  # Use memory mapping for large files
+    low_memory: false  # Read entire file into memory for better performance
+    
+    # Date parsing configuration
+    date_columns:
+      - "transaction_date"
+      - "created_at"
+    date_format: "%Y-%m-%d %H:%M:%S"  # Default date format
+    
+    # Custom data type mapping
+    dtype_mapping:
+      customer_id: "str"
+      transaction_id: "str"
+      amount: "float32"
+      is_fraud: "bool"
+      merchant_category: "category"
+    
+    # Performance settings
+    parallel_reading: true
+    max_workers: 4
+    cache_sample: true  # Cache sample for dtype inference
+    ignore_header_mismatch: false  # Strict header validation
+
+# Data Processing Engine Configuration - NEW
+data_processing:
+  engine: "auto"  # Options: pandas, polars, duckdb, auto
+  memory_limit: "8GB"
+  parallel_processing: true
+  max_workers: 4
+  cache_enabled: true
+  cache_location: "${CACHE_DIR:./artifacts/cache}"
+  
+  # Engine-specific settings
+  pandas_options:
+    use_nullable_dtypes: true
+    copy_on_write: true
+  
+  polars_options:
+    streaming: true
+    lazy_evaluation: true
+  
+  duckdb_options:
+    memory_limit: "4GB"
+    threads: 4
+  
+  # Database Configuration (Alternative)
+  database:
+    type: "postgresql"  # postgresql, mysql, snowflake, redshift
+    connection:
+      host: "${DB_HOST:localhost}"
+      port: "${DB_PORT:5432}"
+      database: "${DB_NAME:ml_data}"
+      username: "${DB_USERNAME}"
+      password: "${DB_PASSWORD}"
+      schema: "${DB_SCHEMA:public}"
+      sslmode: "${DB_SSL_MODE:prefer}"
+    
+    # Data extraction settings
+    extraction:
+      query: |
+        SELECT 
+          customer_id,
+          transaction_id,
+          amount,
+          merchant_category,
+          is_fraud,
+          transaction_date
+        FROM transactions 
+        WHERE transaction_date >= '${START_DATE:2023-01-01}'
+          AND transaction_date <= '${END_DATE:2023-12-31}'
+      
+      chunk_size: 10000
+      cache_data: true
+      cache_location: "${CACHE_DIR:./artifacts/cache}"
+
+# Preprocessing Configuration
+preprocessing:
+  # Data quality checks
+  data_quality:
+    enabled: true
+    checks:
+      - type: "missing_values"
+        threshold: 0.2  # Max 20% missing values
+        action: "warn"  # warn, error, drop
+      - type: "duplicates"
+        action: "remove"
+      - type: "outliers"
+        method: "iqr"
+        threshold: 3.0
+        action: "cap"
+  
+  # Data cleaning
+  cleaning:
+    handle_missing:
+      strategy: "median"  # mean, median, mode, drop, forward_fill
+      columns: ["feature_1", "feature_2"]
+    
+    handle_outliers:
+      method: "clip"  # clip, remove, transform
+      lower_percentile: 0.01
+      upper_percentile: 0.99
+    
+    date_parsing:
+      columns: ["created_at"]
+      format: "%Y-%m-%d %H:%M:%S"
+  
+  # Data transformation
+  transformation:
+    scaling:
+      method: "standard"  # standard, minmax, robust, quantile
+      columns: ["feature_1", "feature_2", "feature_3"]
+    
+    encoding:
+      categorical:
+        method: "onehot"  # onehot, label, target, ordinal
+        columns: ["category_column"]
+        handle_unknown: "ignore"
+    
+    feature_selection:
+      method: "variance_threshold"  # variance_threshold, correlation, mutual_info
+      threshold: 0.01
+
+# Feature Engineering Configuration - Enhanced for Fraud Detection
+feature_engineering:
+  enabled: true
+  automated_features: true
+  interaction_detection: true
+  temporal_features: true
+  fraud_specific_features: true
+  
+  # Fraud-specific derived features
+  derived_features:
+    - name: "amount_to_limit_ratio"
+      expression: "transaction_amount / credit_limit"
+      type: "numeric"
+    
+    - name: "velocity_score"
+      expression: "previous_transactions_today * amount_to_limit_ratio"
+      type: "numeric"
+    
+    - name: "risk_interaction"
+      expression: "merchant_risk_score * location_risk_score"
+      type: "numeric"
+    
+    - name: "unusual_time_flag"
+      expression: "(transaction_hour <= 5) | (transaction_hour >= 23)"
+      type: "boolean"
+  
+  # Time-based features - Enhanced for fraud detection
+  time_features:
+    enabled: true
+    datetime_column: "transaction_datetime"
+    features:
+      - "hour"
+      - "day_of_week"
+      - "month"
+      - "quarter"
+      - "is_weekend"
+      - "is_month_end"
+      - "is_quarter_end"
+    # Cyclical encoding for time features
+    cyclical_encoding: true
+  
+  # Velocity and frequency features
+  velocity_features:
+    enabled: true
+    groupby_columns: ["customer_id", "merchant_id"]
+    time_windows: ["1H", "1D", "7D", "30D"]
+    aggregations: ["count", "sum", "mean", "std"]
+    
+  # Network analysis features
+  network_features:
+    enabled: true
+    entity_columns: ["customer_id", "merchant_id"]
+    connection_threshold: 2
+    features: ["degree", "clustering_coefficient", "pagerank"]
+  
+  # Aggregation features - Customer and merchant behavior
+  aggregations:
+    - groupby: ["customer_id"]
+      features:
+        - {"column": "transaction_amount", "agg": ["mean", "std", "count", "sum"]}
+        - {"column": "merchant_risk_score", "agg": ["mean", "max"]}
+        - {"column": "is_fraud", "agg": "sum"}
+    
+    - groupby: ["merchant_id"]
+      features:
+        - {"column": "transaction_amount", "agg": ["mean", "std", "count"]}
+        - {"column": "is_fraud", "agg": ["sum", "mean"]}
+  
+  # Interaction detection
+  interaction_detection:
+    method: "mutual_information"
+    top_k_interactions: 20
+    min_interaction_strength: 0.1
+
+# Imbalance Handling Configuration - NEW for fraud detection
+imbalance_handling:
+  strategy: "preserve_natural"  # preserve_natural, balance, cost_sensitive
+  fraud_aware_sampling: true
+  cost_sensitive_learning: true
+  focal_loss_gamma: 2.0
+  
+  # Preserve natural distribution for fraud detection
+  natural_distribution:
+    preserve_ratio: true
+    min_fraud_samples: 100
+    stratified_split: true
+  
+  # Cost-sensitive learning
+  class_weights:
+    auto_compute: true
+    fraud_weight_multiplier: 10
+    custom_weights: null
+  
+  # Advanced sampling strategies
+  sampling_strategies:
+    enabled: false  # Disabled to preserve natural imbalance
+    methods: ["smote", "adasyn", "borderline_smote"]
+    sampling_ratio: 0.1
+
+# Model Training Configuration - Enhanced with AutoML
+model_training:
+  # AutoML Configuration - NEW
+  automl_enabled: true
+  automl_config_path: "./configs/automl_config.yaml"
+  
+  # AutoML Quick Settings
+  automl:
+    enabled: true
+    algorithms:
+      - "logistic_regression"
+      - "random_forest"
+      - "xgboost"
+      - "lightgbm"
+      - "catboost"
+      - "h2o_gbm"
+      - "h2o_automl"
+    time_budget: 3600  # seconds (1 hour)
+    optimization_metric: "precision_at_1_percent"
+    ensemble_methods: ["voting", "stacking"]
+    interpretability_constraint: 0.8  # min interpretability score
+    early_stopping_patience: 10
+  
+  # Train/validation/test split
+  data_split:
+    method: "time_based"  # random, stratified, time_based
+    train_ratio: 0.7
+    validation_ratio: 0.15
+    test_ratio: 0.15
+    stratify_column: "target_variable"
+    time_column: "created_at"
+  
+  # Target variable
+  target:
+    column: "target_variable"
+    type: "classification"  # classification, regression
+    # For classification
+    classes: [0, 1]
+    # For regression
+    # transform: "log"  # log, sqrt, box-cox
+  
+  # Model configuration
+  models:
+    - name: "xgboost"
+      type: "xgboost.XGBClassifier"
+      hyperparameters:
+        n_estimators: 100
+        max_depth: 6
+        learning_rate: 0.1
+        subsample: 0.8
+        colsample_bytree: 0.8
+        random_state: 42
+      
+      # Hyperparameter tuning
+      hyperparameter_tuning:
+        enabled: true
+        method: "random_search"  # grid_search, random_search, bayesian
+        cv_folds: 5
+        n_iter: 50
+        param_grid:
+          n_estimators: [50, 100, 200]
+          max_depth: [3, 6, 9]
+          learning_rate: [0.01, 0.1, 0.2]
+    
+    - name: "lightgbm"
+      type: "lightgbm.LGBMClassifier"
+      hyperparameters:
+        n_estimators: 100
+        max_depth: 6
+        learning_rate: 0.1
+        random_state: 42
+  
+  # Cross-validation
+  cross_validation:
+    enabled: true
+    method: "stratified_kfold"  # kfold, stratified_kfold, time_series_split
+    n_folds: 5
+    shuffle: true
+    random_state: 42
+  
+  # Model selection
+  model_selection:
+    metric: "roc_auc"  # accuracy, precision, recall, f1, roc_auc, rmse, mae
+    higher_is_better: true
+
+# Evaluation Configuration
+evaluation:
+  # Metrics to calculate
+  metrics:
+    classification:
+      - "accuracy"
+      - "precision"
+      - "recall"
+      - "f1_score"
+      - "roc_auc"
+      - "confusion_matrix"
+      - "classification_report"
+    
+    regression:
+      - "mse"
+      - "rmse"
+      - "mae"
+      - "r2_score"
+      - "mean_absolute_percentage_error"
+  
+  # Evaluation reports
+  reports:
+    enabled: true
+    output_format: ["json", "html"]  # json, html, pdf
+    include_plots: true
+    
+    plots:
+      - "confusion_matrix"
+      - "roc_curve"
+      - "precision_recall_curve"
+      - "feature_importance"
+      - "learning_curves"
+  
+  # Model comparison
+  comparison:
+    enabled: true
+    baseline_model: "dummy_classifier"
+    significance_test: "mcnemar"  # mcnemar, wilcoxon
+
+# Explainability Configuration - Comprehensive Interpretability Suite
+explainability:
+  enabled: true
+  compliance_mode: true
+  generate_reports: true
+  interactive_dashboard: true
+  
+  # Comprehensive interpretability methods
+  methods:
+    global:
+      - "shap"
+      - "functional_anova"
+      - "ale_plots"
+      - "permutation_importance"
+      - "surrogate_models"
+    local:
+      - "lime"
+      - "anchors"
+      - "counterfactuals"
+      - "ice_plots"
+    advanced:
+      - "prototypes"
+      - "concept_activation"
+      - "causal_analysis"
+      - "trust_scores"
+  
+  # Global Interpretability Methods
+  global_interpretability:
+    # SHAP analysis - Enhanced
+    shap:
+      enabled: true
+      explainer_type: "auto"  # auto, tree, linear, kernel, deep
+      sample_size: 1000
+      interaction_analysis: true
+      plots:
+        - "summary_plot"
+        - "waterfall_plot"
+        - "force_plot"
+        - "dependence_plot"
+        - "interaction_plot"
+    
+    # Functional ANOVA
+    functional_anova:
+      enabled: true
+      max_order: 2
+      n_permutations: 100
+      interaction_strength_threshold: 0.1
+    
+    # ALE (Accumulated Local Effects) plots
+    ale_plots:
+      enabled: true
+      sample_size: 1000
+      features: "auto"  # auto, top_10, all
+      n_bins: 20
+      center: true
+      plot_pdp_comparison: true
+    
+    # Permutation importance
+    permutation_importance:
+      enabled: true
+      n_repeats: 10
+      scoring_metric: "precision_at_k"
+      plot_top_n: 20
+    
+    # Surrogate models
+    surrogate_models:
+      enabled: true
+      models: ["decision_tree", "linear_model"]
+      max_depth: 5
+      fidelity_threshold: 0.8
+  
+  # Local Interpretability Methods
+  local_interpretability:
+    # LIME analysis
+    lime:
+      enabled: true
+      mode: "tabular"
+      sample_size: 100
+      n_samples: 5000
+      n_features: 10
+      discretize_continuous: true
+      feature_selection: "auto"
+    
+    # Anchors explanations
+    anchors:
+      enabled: true
+      threshold: 0.95
+      max_anchor_size: 5
+      sample_size: 1000
+      beam_size: 2
+      coverage_samples: 10000
+    
+    # Counterfactual explanations
+    counterfactuals:
+      enabled: true
+      method: "dice"  # dice, wachter, prototype
+      num_cfs: 5
+      max_features_changed: 3
+      proximity_weight: 0.5
+      diversity_weight: 1.0
+      actionability_constraints: true
+    
+    # ICE plots
+    ice_plots:
+      enabled: true
+      n_samples: 100
+      feature_subset: "top_10"
+  
+  # Advanced Interpretability Methods
+  advanced_interpretability:
+    # Trust scores and uncertainty
+    trust_scores:
+      enabled: true
+      k_neighbors: 10
+      confidence_threshold: 0.8
+      uncertainty_quantification: true
+    
+    # Prototypes and criticisms
+    prototypes:
+      enabled: true
+      n_prototypes_per_class: 10
+      selection_method: "mmcriticism"  # kmeans, random, mmcriticism
+      include_criticisms: true
+    
+    # Concept activation vectors
+    concept_activation:
+      enabled: true
+      n_concepts: 20
+      significance_level: 0.05
+      concept_sensitivity: true
+    
+    # Causal analysis
+    causal_analysis:
+      enabled: true
+      method: "do_calculus"
+      confounding_adjustment: true
+  
+  # Fraud-specific explanations
+  fraud_specific:
+    reason_codes: true
+    narrative_explanations: true
+    risk_factors: true
+    pattern_detection: true
+    regulatory_explanations: true
+  
+  # Reporting configuration
+  reporting:
+    auto_generate: true
+    include_technical_details: true
+    business_summary: true
+    regulatory_format: true
+    export_formats: ["html", "pdf", "json"]
+
+# Output Configuration - Enhanced for Production
+output:
+  # Output directory structure
+  artifacts_dir: "${ARTIFACTS_DIR:./artifacts}"
+  
+  # Admissible ML reports - Enhanced
+  admissible_ml_reports: true
+  model_cards: true
+  fairness_analysis: true
+  bias_detection: true
+  uncertainty_quantification: true
+  regulatory_compliance: ["sr11-7", "gdpr", "fair_lending"]
+  
+  # Business metrics focus
+  business_metrics_focus: true
+  
+  # Model artifacts - Enhanced
+  model_artifacts:
+    save_location: "${MODEL_ARTIFACTS_DIR:./artifacts/models}"
+    format: "joblib"  # joblib, pickle, mlflow, onnx
+    versioning: true
+    compression: true
+    digital_signature: true
+    metadata_tracking: true
+    backup_enabled: true
+  
+  # Predictions - Enhanced
+  predictions:
+    save_location: "${PREDICTIONS_DIR:./artifacts/predictions}"
+    format: "parquet"  # csv, parquet, json, avro
+    include_probabilities: true
+    include_explanations: true
+    batch_size: 10000
+    streaming_output: false
+  
+  # Reports and visualizations - Comprehensive
+  reports:
+    save_location: "${REPORTS_DIR:./artifacts/reports}"
+    formats: ["html", "pdf", "excel", "json"]
+    include_data_profiling: true
+    include_model_cards: true
+    include_fairness_analysis: true
+    include_compliance_documentation: true
+    include_business_impact: true
+    interactive_dashboard: true
+    
+  # MLflow tracking - Enhanced
+  mlflow_tracking: true
+  
+  # MLflow tracking
+  mlflow:
+    enabled: "${MLFLOW_ENABLED:false}"
+    tracking_uri: "${MLFLOW_TRACKING_URI:http://localhost:5000}"
+    experiment_name: "${MLFLOW_EXPERIMENT:ml-pipeline-framework}"
+    
+    # What to log
+    log_params: true
+    log_metrics: true
+    log_artifacts: true
+    log_model: true
+    
+    # Tags
+    tags:
+      environment: "${ENVIRONMENT:dev}"
+      team: "data-science"
+      project: "ml-pipeline-framework"
+
+# Monitoring and Alerting - Comprehensive Production Monitoring
+monitoring:
+  enabled: true
+  monitoring_setup: true
+  comprehensive_monitoring: true
+  
+  # Data drift detection - Enhanced
+  drift_detection: true
+  data_drift:
+    enabled: true
+    reference_dataset: "training"  # training, validation, custom
+    drift_threshold: 0.05
+    statistical_tests:
+      - "ks_test"
+      - "chi2_test" 
+      - "psi_test"  # Population Stability Index
+      - "wasserstein_distance"
+      - "jensen_shannon_divergence"
+    feature_importance_drift: true
+    concept_drift_detection: true
+    
+  # Model performance monitoring - Enhanced
+  performance_tracking: true
+  performance_monitoring:
+    enabled: true
+    baseline_metrics: "training_metrics"
+    alert_threshold: 0.05  # 5% degradation for production
+    business_impact_tracking: true
+    sla_monitoring: true
+    latency_monitoring: true
+    throughput_monitoring: true
+    
+  # Business metrics monitoring - NEW
+  business_metrics:
+    enabled: true
+    metrics: ["precision_at_1_percent", "expected_value", "cost_savings"]
+    thresholds:
+      precision_at_1_percent: 0.80
+      false_positive_rate: 0.05
+      recall_minimum: 0.50
+    alert_on_degradation: true
+    
+  # Fairness monitoring - Enhanced
+  fairness_monitoring:
+    enabled: true
+    protected_attributes: ["age", "gender", "race", "ethnicity"]
+    fairness_metrics: ["demographic_parity", "equalized_odds", "calibration"]
+    alert_threshold: 0.8  # 80% rule for disparate impact
+    continuous_monitoring: true
+    bias_detection: true
+    
+  # A/B Testing - NEW
+  ab_testing_enabled: true
+  ab_testing:
+    enabled: true
+    framework: "champion_challenger"
+    traffic_split: 0.05  # 5% to challenger
+    statistical_tests: ["t_test", "mann_whitney"]
+    significance_level: 0.05
+    minimum_sample_size: 1000
+    
+  # Alert configuration - Enhanced
+  alert_thresholds:
+    drift_threshold: 0.05
+    performance_degradation: 0.05
+    fairness_violation: 0.8
+    latency_threshold: 100  # ms
+    error_rate_threshold: 0.01
+    
+  alerts:
+    enabled: true
+    channels:
+      - type: "email"
+        recipients: ["${ALERT_EMAIL}"]
+        severity_levels: ["critical", "warning"]
+      - type: "slack"
+        webhook_url: "${SLACK_WEBHOOK_URL}"
+        severity_levels: ["critical", "warning", "info"]
+      - type: "pagerduty"
+        service_key: "${PAGERDUTY_SERVICE_KEY}"
+        severity_levels: ["critical"]
+    
+    # Alert aggregation and noise reduction
+    aggregation:
+      enabled: true
+      time_window: 300  # 5 minutes
+      max_alerts_per_window: 5
+
+# Resource Configuration
+resources:
+  # Compute resources
+  compute:
+    n_jobs: "${N_JOBS:-1}"  # Number of parallel jobs
+    memory_limit: "${MEMORY_LIMIT:8GB}"
+    
+  # Spark configuration (if using PySpark)
+  spark:
+    enabled: false
+    app_name: "ml-pipeline-framework"
+    master: "${SPARK_MASTER:local[*]}"
+    config:
+      "spark.sql.adaptive.enabled": "true"
+      "spark.sql.adaptive.coalescePartitions.enabled": "true"
