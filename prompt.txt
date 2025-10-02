@@ -1,0 +1,26 @@
+Role
+You are an expert power point deck maker for a large bank capable of crating professional, well structured, clean and concise presentations about complex topics in AI for business leadership. 
+Task
+Create a presentation explaining the difference between AI agents vs Agentic AI applications for an enterprise. 
+The target audience of the presentation is business leader in customer and fraud operations space.  
+Style and other Guidelines
+* Use MECE (Mutually Exclusive Collectively Exhaustive) principles 
+* Use simple illustrations (look at the illustrations in the reference research paper attached) as much as possible to drive the message and narrative
+* Have one slide comparing and contrasting Generative AI vs AI agents vs Agentic AI applications. 
+* Have one slide on rules of thumb and provide guidelines on how to choose between AI agent vs Agentic AI patter for a given use case
+* Have one slide on what is required from an tools, platforms, data and other tech infra that is needed to build an Agentic AI application
+* Dedicate couple of slides talking about cons, guardrails, human in the look and other controls that are needed for Agentic AI applications.
+* Create reference generic architecture pattern for the two paradigms. Use the links in reference section for architectural references and example illustrations. the illustrations in the slides should be similar to what is there in the below links.
+* Add slides and give example simple usecases for AI Agents vs Agentic AI, along with high level solution diagrams side by side for comparison
+Use attached research paper and web search results for reference. 
+Do's and Don'ts
+* Don't use long sentences. Use single line bullet points
+* Don't use more than 5 bullet points per page
+* Generate the content keeping in mind the target audience
+References
+* https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.srajdev.com%2Fp%2Funderstanding-agentic-ai-architecture&psig=AOvVaw2qhnh8ZD02loJr_AM_pbG_&ust=1759450349607000&source=images&cd=vfe&opi=89978449&ved=0CBkQjhxqGAoTCPDpzLudhJADFQAAAAAdAAAAABCGAg 
+* https://www.google.com/url?sa=i&url=https%3A%2F%2Ftheaiinsider.tech%2F2025%2F05%2F19%2Fwhats-the-difference-between-ai-agents-and-agentic-ai-new-study-separates-signal-from-noise-in-the-ai-agent-boom%2F&psig=AOvVaw2qhnh8ZD02loJr_AM_pbG_&ust=1759450349607000&source=images&cd=vfe&opi=89978449&ved=0CBYQjRxqGAoTCPDpzLudhJADFQAAAAAdAAAAABCdAg 
+* https://www.google.com/url?sa=i&url=https%3A%2F%2Fsendbird.com%2Fblog%2Fwhat-is-agentic-ai&psig=AOvVaw2qhnh8ZD02loJr_AM_pbG_&ust=1759450349607000&source=images&cd=vfe&opi=89978449&ved=0CBkQjhxqGAoTCPDpzLudhJADFQAAAAAdAAAAABDlAg 
+* https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.linkedin.com%2Fpulse%2Fgenerative-ai-vs-agents-agentic-aigenerative-bhuwan-mittal-xskqc&psig=AOvVaw2qhnh8ZD02loJr_AM_pbG_&ust=1759450349607000&source=images&cd=vfe&opi=89978449&ved=0CBkQjhxqGAoTCPDpzLudhJADFQAAAAAdAAAAABD9Ag 
+* https://www.google.com/url?sa=i&url=https%3A%2F%2Fencord.com%2Fblog%2Fai-agents-guide-to-agentic-ai%2F&psig=AOvVaw1OHlVWsPM6MygtAVx3ZNs2&ust=1759450877253000&source=images&cd=vfe&opi=89978449&ved=0CBkQjhxqFwoTCODpqbifhJADFQAAAAAdAAAAABAj 
+* https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.boozallen.com%2Finsights%2Fvelocity%2Fthe-age-of-agentic-ai.html&psig=AOvVaw1OHlVWsPM6MygtAVx3ZNs2&ust=1759450877253000&source=images&cd=vfe&opi=89978449&ved=0CBkQjhxqGAoTCODpqbifhJADFQAAAAAdAAAAABDXAQ
